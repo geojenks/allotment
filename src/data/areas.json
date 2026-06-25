@@ -174,5 +174,6 @@
         { "crop": "Cherry (dwarf)", "family": "tree-fruit", "year": 2026, "status": "growing", "notes": "~2m+ tall." }
       ]
     }
-  ]
+  ],
+  "markers": []
 }

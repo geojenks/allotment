@@ -10,12 +10,20 @@ const mapSrc = `${base}/map/plot-base.png`;
   <div class="plot__bar">
     <div class="modes" role="group" aria-label="Map mode">
       <button id="mode-view" class="mode is-active" type="button">View</button>
-      <button id="mode-edit" class="mode" type="button">Edit areas</button>
+      <button id="mode-edit" class="mode" type="button">Edit</button>
     </div>
+
     <div id="edit-tools" class="edit-tools" hidden>
-      <button id="add-area" type="button">+ Add area</button>
-      <button id="export-json" type="button">Copy JSON</button>
-      <span class="hint">Drag to move · drag the corner to resize</span>
+      <button id="add-area" type="button">+ Area</button>
+      <div id="palette" class="palette" aria-label="Plant icons"></div>
+    </div>
+
+    <div id="save-state" class="save-state" hidden>
+      <span class="dot"></span>
+      <span class="save-state__label">Saved on this device</span>
+      <button id="download-json" type="button">Download</button>
+      <button id="copy-json" type="button">Copy</button>
+      <button id="discard" type="button" class="ghost">Discard</button>
     </div>
   </div>
 
@@ -50,8 +58,10 @@ const mapSrc = `${base}/map/plot-base.png`;
             transform="rotate(-135.6319)"
             clip-path="url(#mapclip)"></image>
           <g id="area-layer"></g>
+          <g id="marker-layer"></g>
         </g>
       </svg>
+      <p id="place-hint" class="place-hint" hidden>Tap the plot to place the plant.</p>
     </div>
 
     <aside id="info" class="info">
@@ -66,15 +76,19 @@ const mapSrc = `${base}/map/plot-base.png`;
 
   <dialog id="export-dialog">
     <form method="dialog">
-      <h3>Updated areas JSON</h3>
-      <p>Copied to your clipboard. Paste this into <code>src/data/areas.json</code> to save your layout changes.</p>
+      <h3>Plot JSON</h3>
+      <p>
+        Copied to your clipboard. To make these changes permanent (and visible on
+        other devices / the live site), paste this into
+        <code>src/data/areas.json</code> and push — or use the Download button.
+      </p>
       <textarea id="export-text" rows="12" readonly></textarea>
       <menu><button value="close">Close</button></menu>
     </form>
   </dialog>
 </section>
 
-<script define:vars={{ plotData }}>
+<script define:vars={{ plotData, base }}>
   const TYPE_META = {
     bed: { color: '#c98a3b', label: 'Bed' },
     tree: { color: '#5f8a36', label: 'Tree' },
@@ -95,42 +109,134 @@ const mapSrc = `${base}/map/plot-base.png`;
     volunteer: 'Self-seeded',
   };
 
+  // Plant icon palette. value is the emoji glyph drawn on the map.
+  const ICONS = [
+    { icon: '🥔', label: 'Potato' },
+    { icon: '🥦', label: 'Brassica' },
+    { icon: '🧅', label: 'Onion' },
+    { icon: '🧄', label: 'Garlic' },
+    { icon: '🥕', label: 'Carrot / root' },
+    { icon: '🥬', label: 'Leafy / salad' },
+    { icon: '🍅', label: 'Tomato' },
+    { icon: '🫛', label: 'Peas / beans' },
+    { icon: '🎃', label: 'Squash' },
+    { icon: '🌽', label: 'Sweetcorn' },
+    { icon: '🍓', label: 'Strawberry' },
+    { icon: '🫐', label: 'Berry' },
+    { icon: '🌿', label: 'Herb' },
+    { icon: '🌷', label: 'Flower' },
+    { icon: '🌱', label: 'Seedling' },
+  ];
+
   const SVGNS = 'http://www.w3.org/2000/svg';
-  const areas = plotData.areas;
+  const STORE_KEY = 'allotment:plot:v1';
+
+  // ---- state + persistence ----------------------------------------------
+
+  const baseline = {
+    areas: plotData.areas,
+    markers: plotData.markers || [],
+  };
+  const baselineJSON = JSON.stringify(baseline);
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.areas)) {
+          return { areas: parsed.areas, markers: parsed.markers || [] };
+        }
+      }
+    } catch {}
+    return JSON.parse(baselineJSON); // fresh clone of the committed data
+  }
+
+  const state = loadState();
+  let areas = state.areas;
+  let markers = state.markers;
+
+  let saveTimer = null;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try {
+        localStorage.setItem(STORE_KEY, JSON.stringify({ areas, markers }));
+      } catch {}
+      updateSaveState();
+    }, 150);
+  }
+
+  function isDirty() {
+    return JSON.stringify({ areas, markers }) !== baselineJSON;
+  }
+
+  const saveState = document.getElementById('save-state');
+  const saveLabel = saveState.querySelector('.save-state__label');
+  function updateSaveState() {
+    const dirty = isDirty();
+    saveState.hidden = !dirty;
+    if (dirty) saveLabel.textContent = 'Unsaved to repo — saved on this device';
+  }
+
+  // ---- helpers -----------------------------------------------------------
 
   const svg = document.getElementById('plot-svg');
-  const layer = document.getElementById('area-layer');
+  const areaLayer = document.getElementById('area-layer');
+  const markerLayer = document.getElementById('marker-layer');
   const info = document.getElementById('info');
   const editTools = document.getElementById('edit-tools');
+  const placeHint = document.getElementById('place-hint');
   const exportDialog = document.getElementById('export-dialog');
 
-  let mode = 'view';
-  let selectedId = null;
-  const nodes = new Map(); // id -> { group, rect, label, badge, handle }
-
-  // ---- rendering ---------------------------------------------------------
+  let mode = 'view'; // 'view' | 'edit'
+  let tool = 'select'; // 'select' | 'place'
+  let placeIcon = null; // chosen palette entry while placing
+  let selected = null; // { kind: 'area'|'marker', id }
+  const areaNodes = new Map();
+  const markerNodes = new Map();
 
   function el(name, attrs) {
     const node = document.createElementNS(SVGNS, name);
     for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
     return node;
   }
-
   function colorFor(area) {
     return (TYPE_META[area.type] || TYPE_META.unused).color;
   }
+  function uid(prefix) {
+    return prefix + Math.random().toString(36).slice(2, 8);
+  }
+  function toLocal(evt) {
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    return pt.matrixTransform(areaLayer.getScreenCTM().inverse());
+  }
+  function round(n) {
+    return Math.round(n * 1000) / 1000;
+  }
+  function markersInArea(area) {
+    return markers.filter(
+      (m) =>
+        m.x >= area.shape.x &&
+        m.x <= area.shape.x + area.shape.w &&
+        m.y >= area.shape.y &&
+        m.y <= area.shape.y + area.shape.h
+    );
+  }
 
-  function renderAll() {
-    layer.replaceChildren();
-    nodes.clear();
+  // ---- rendering: areas --------------------------------------------------
+
+  function renderAreas() {
+    areaLayer.replaceChildren();
+    areaNodes.clear();
     areas.forEach((area, i) => renderArea(area, i + 1));
-    refreshSelection();
   }
 
   function renderArea(area, number) {
     const c = colorFor(area);
     const g = el('g', { class: 'area', 'data-id': area.id });
-
     const rect = el('rect', {
       x: area.shape.x,
       y: area.shape.y,
@@ -138,31 +244,28 @@ const mapSrc = `${base}/map/plot-base.png`;
       height: area.shape.h,
       rx: 0.8,
       fill: c,
-      'fill-opacity': 0.32,
+      'fill-opacity': 0.28,
       stroke: c,
       'stroke-width': 0.55,
     });
-
     const badge = el('circle', {
-      cx: area.shape.x + 2.6,
-      cy: area.shape.y + 2.6,
-      r: 1.9,
+      cx: area.shape.x + 2.4,
+      cy: area.shape.y + 2.4,
+      r: 1.8,
       fill: c,
       stroke: '#fff',
-      'stroke-width': 0.35,
+      'stroke-width': 0.32,
     });
     const badgeText = el('text', {
-      x: area.shape.x + 2.6,
-      y: area.shape.y + 2.6,
+      x: area.shape.x + 2.4,
+      y: area.shape.y + 2.4,
       'text-anchor': 'middle',
       'dominant-baseline': 'central',
-      'font-size': 2.2,
+      'font-size': 2.1,
       fill: '#fff',
       'font-family': 'system-ui, sans-serif',
     });
     badgeText.textContent = String(number);
-
-    // resize handle (edit mode only)
     const handle = el('rect', {
       x: area.shape.x + area.shape.w - 1.6,
       y: area.shape.y + area.shape.h - 1.6,
@@ -176,49 +279,123 @@ const mapSrc = `${base}/map/plot-base.png`;
     handle.style.display = 'none';
 
     g.append(rect, badge, badgeText, handle);
-    layer.append(g);
-    nodes.set(area.id, { group: g, rect, badge, badgeText, handle, number });
+    areaLayer.append(g);
+    areaNodes.set(area.id, { group: g, rect, badge, badgeText, handle, number });
 
-    // events
     g.addEventListener('mouseenter', () => g.classList.add('is-hover'));
     g.addEventListener('mouseleave', () => g.classList.remove('is-hover'));
-    g.addEventListener('pointerdown', (e) => onPointerDown(e, area));
+    g.addEventListener('pointerdown', (e) => onAreaDown(e, area));
   }
 
   function syncArea(area) {
-    const n = nodes.get(area.id);
+    const n = areaNodes.get(area.id);
     if (!n) return;
-    n.rect.setAttribute('x', area.shape.x);
-    n.rect.setAttribute('y', area.shape.y);
-    n.rect.setAttribute('width', area.shape.w);
-    n.rect.setAttribute('height', area.shape.h);
-    n.badge.setAttribute('cx', area.shape.x + 2.6);
-    n.badge.setAttribute('cy', area.shape.y + 2.6);
-    n.badgeText.setAttribute('x', area.shape.x + 2.6);
-    n.badgeText.setAttribute('y', area.shape.y + 2.6);
-    n.handle.setAttribute('x', area.shape.x + area.shape.w - 1.6);
-    n.handle.setAttribute('y', area.shape.y + area.shape.h - 1.6);
+    const s = area.shape;
+    n.rect.setAttribute('x', s.x);
+    n.rect.setAttribute('y', s.y);
+    n.rect.setAttribute('width', s.w);
+    n.rect.setAttribute('height', s.h);
+    n.badge.setAttribute('cx', s.x + 2.4);
+    n.badge.setAttribute('cy', s.y + 2.4);
+    n.badgeText.setAttribute('x', s.x + 2.4);
+    n.badgeText.setAttribute('y', s.y + 2.4);
+    n.handle.setAttribute('x', s.x + s.w - 1.6);
+    n.handle.setAttribute('y', s.y + s.h - 1.6);
     const c = colorFor(area);
     for (const node of [n.rect, n.badge, n.handle]) node.setAttribute('stroke', c);
     n.rect.setAttribute('fill', c);
     n.badge.setAttribute('fill', c);
   }
 
-  // ---- selection + info panel -------------------------------------------
+  // ---- rendering: markers ------------------------------------------------
+
+  function renderMarkers() {
+    markerLayer.replaceChildren();
+    markerNodes.clear();
+    markers.forEach((m) => renderMarker(m));
+  }
+
+  function renderMarker(m) {
+    const g = el('g', { class: 'marker', 'data-id': m.id });
+    const circle = el('circle', {
+      cx: m.x,
+      cy: m.y,
+      r: m.r,
+      fill: '#3f7d2f',
+      'fill-opacity': 0.16,
+      stroke: '#3f7d2f',
+      'stroke-width': 0.4,
+    });
+    const glyph = el('text', {
+      x: m.x,
+      y: m.y,
+      'text-anchor': 'middle',
+      'dominant-baseline': 'central',
+      'font-size': Math.max(2.4, Math.min(m.r * 1.4, 6)),
+    });
+    glyph.textContent = m.icon;
+    const handle = el('circle', {
+      cx: m.x + m.r,
+      cy: m.y,
+      r: 1.1,
+      fill: '#fff',
+      stroke: '#3f7d2f',
+      'stroke-width': 0.45,
+      class: 'handle',
+    });
+    handle.style.display = 'none';
+    g.append(circle, glyph, handle);
+    markerLayer.append(g);
+    markerNodes.set(m.id, { group: g, circle, glyph, handle });
+    g.addEventListener('pointerdown', (e) => onMarkerDown(e, m));
+  }
+
+  function syncMarker(m) {
+    const n = markerNodes.get(m.id);
+    if (!n) return;
+    n.circle.setAttribute('cx', m.x);
+    n.circle.setAttribute('cy', m.y);
+    n.circle.setAttribute('r', m.r);
+    n.glyph.setAttribute('x', m.x);
+    n.glyph.setAttribute('y', m.y);
+    n.glyph.setAttribute('font-size', Math.max(2.4, Math.min(m.r * 1.4, 6)));
+    n.glyph.textContent = m.icon;
+    n.handle.setAttribute('cx', m.x + m.r);
+    n.handle.setAttribute('cy', m.y);
+  }
+
+  // ---- selection ---------------------------------------------------------
 
   function refreshSelection() {
-    for (const [id, n] of nodes) {
-      const sel = id === selectedId;
+    for (const [id, n] of areaNodes) {
+      const sel = selected?.kind === 'area' && selected.id === id;
       n.group.classList.toggle('is-selected', sel);
-      n.handle.style.display = mode === 'edit' && sel ? '' : 'none';
+      n.handle.style.display = mode === 'edit' && tool === 'select' && sel ? '' : 'none';
+    }
+    for (const [id, n] of markerNodes) {
+      const sel = selected?.kind === 'marker' && selected.id === id;
+      n.group.classList.toggle('is-selected', sel);
+      n.handle.style.display = mode === 'edit' && tool === 'select' && sel ? '' : 'none';
     }
   }
 
-  function select(id) {
-    selectedId = id;
+  function selectArea(id) {
+    selected = { kind: 'area', id };
     refreshSelection();
-    renderInfo(areas.find((a) => a.id === id));
+    renderInfo();
   }
+  function selectMarker(id) {
+    selected = { kind: 'marker', id };
+    refreshSelection();
+    renderInfo();
+  }
+  function clearSelection() {
+    selected = null;
+    refreshSelection();
+    renderInfo();
+  }
+
+  // ---- info panel --------------------------------------------------------
 
   function tag(text, cls) {
     const s = document.createElement('span');
@@ -226,7 +403,6 @@ const mapSrc = `${base}/map/plot-base.png`;
     s.textContent = text;
     return s;
   }
-
   function dateRange(from, to) {
     const fmt = (d) =>
       new Date(d).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
@@ -235,22 +411,35 @@ const mapSrc = `${base}/map/plot-base.png`;
     if (to) return `until ${fmt(to)}`;
     return '';
   }
-
-  function renderInfo(area) {
+  function emptyInfo(msg) {
     info.replaceChildren();
-    if (!area) {
-      const p = document.createElement('p');
-      p.className = 'info__empty';
-      p.textContent = "Tap an area on the plan to see what's there.";
-      info.append(p);
+    const p = document.createElement('p');
+    p.className = 'info__empty';
+    p.textContent = msg;
+    info.append(p);
+  }
+
+  function renderInfo() {
+    if (!selected) {
+      emptyInfo(
+        mode === 'edit'
+          ? 'Tap an area to edit it, drag to move, or pick a plant icon to drop one in.'
+          : "Tap an area on the plan to see what's there."
+      );
       return;
     }
-
-    if (mode === 'edit') {
-      info.append(editForm(area));
-      return;
+    if (selected.kind === 'marker') {
+      const m = markers.find((x) => x.id === selected.id);
+      if (!m) return emptyInfo('Select something on the plan.');
+      return mode === 'edit' ? info.replaceChildren(markerForm(m)) : renderMarkerInfo(m);
     }
+    const area = areas.find((a) => a.id === selected.id);
+    if (!area) return emptyInfo('Select something on the plan.');
+    return mode === 'edit' ? info.replaceChildren(areaForm(area)) : renderAreaInfo(area);
+  }
 
+  function renderAreaInfo(area) {
+    info.replaceChildren();
     const meta = TYPE_META[area.type] || TYPE_META.unused;
     const h = document.createElement('h2');
     h.textContent = area.name;
@@ -269,6 +458,24 @@ const mapSrc = `${base}/map/plot-base.png`;
       p.className = 'notes';
       p.textContent = area.notes;
       info.append(p);
+    }
+
+    const inArea = markersInArea(area);
+    if (inArea.length) {
+      const hh = document.createElement('h3');
+      hh.textContent = 'Plants here';
+      info.append(hh);
+      const row = document.createElement('div');
+      row.className = 'plant-chips';
+      for (const m of inArea) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'plant-chip';
+        chip.textContent = `${m.icon} ${m.label || ''}`.trim();
+        chip.addEventListener('click', () => selectMarker(m.id));
+        row.append(chip);
+      }
+      info.append(row);
     }
 
     if (area.plantings?.length) {
@@ -318,7 +525,7 @@ const mapSrc = `${base}/map/plot-base.png`;
       info.append(ul);
     }
 
-    if (!area.plantings?.length && !area.tasks?.length && !area.notes) {
+    if (!inArea.length && !area.plantings?.length && !area.tasks?.length && !area.notes) {
       const p = document.createElement('p');
       p.className = 'muted';
       p.textContent = 'Nothing recorded here yet.';
@@ -326,7 +533,25 @@ const mapSrc = `${base}/map/plot-base.png`;
     }
   }
 
-  // ---- edit form ---------------------------------------------------------
+  function renderMarkerInfo(m) {
+    info.replaceChildren();
+    const h = document.createElement('h2');
+    h.textContent = `${m.icon} ${m.label || 'Plant'}`;
+    info.append(h);
+    const host = areas.find(
+      (a) =>
+        m.x >= a.shape.x &&
+        m.x <= a.shape.x + a.shape.w &&
+        m.y >= a.shape.y &&
+        m.y <= a.shape.y + a.shape.h
+    );
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = host ? `In: ${host.name}` : 'Not inside a mapped area.';
+    info.append(p);
+  }
+
+  // ---- edit forms --------------------------------------------------------
 
   function field(labelText, inputEl) {
     const wrap = document.createElement('label');
@@ -337,7 +562,7 @@ const mapSrc = `${base}/map/plot-base.png`;
     return wrap;
   }
 
-  function editForm(area) {
+  function areaForm(area) {
     const frag = document.createDocumentFragment();
     const h = document.createElement('h2');
     h.textContent = 'Edit area';
@@ -348,26 +573,9 @@ const mapSrc = `${base}/map/plot-base.png`;
     name.value = area.name;
     name.addEventListener('input', () => {
       area.name = name.value;
+      save();
     });
     frag.append(field('Name', name));
-
-    const id = document.createElement('input');
-    id.type = 'text';
-    id.value = area.id;
-    id.addEventListener('change', () => {
-      const old = area.id;
-      area.id = id.value.trim() || old;
-      if (area.id !== old) {
-        const n = nodes.get(old);
-        if (n) {
-          nodes.delete(old);
-          nodes.set(area.id, n);
-          n.group.setAttribute('data-id', area.id);
-        }
-        selectedId = area.id;
-      }
-    });
-    frag.append(field('ID (slug)', id));
 
     const type = document.createElement('select');
     for (const [val, m] of Object.entries(TYPE_META)) {
@@ -380,6 +588,7 @@ const mapSrc = `${base}/map/plot-base.png`;
     type.addEventListener('change', () => {
       area.type = type.value;
       syncArea(area);
+      save();
     });
     frag.append(field('Type', type));
 
@@ -388,6 +597,7 @@ const mapSrc = `${base}/map/plot-base.png`;
     notes.value = area.notes || '';
     notes.addEventListener('input', () => {
       area.notes = notes.value;
+      save();
     });
     frag.append(field('Notes', notes));
 
@@ -398,54 +608,134 @@ const mapSrc = `${base}/map/plot-base.png`;
     cb.checked = !area.provisional;
     cb.addEventListener('change', () => {
       area.provisional = !cb.checked;
+      save();
     });
     const cspan = document.createElement('span');
-    cspan.textContent = 'Name confirmed (not provisional)';
+    cspan.textContent = 'Name confirmed';
     confirmRow.append(cb, cspan);
     frag.append(confirmRow);
 
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'danger';
-    del.textContent = 'Delete this area';
+    del.textContent = 'Delete area';
     del.addEventListener('click', () => {
       const i = areas.findIndex((a) => a.id === area.id);
       if (i >= 0) areas.splice(i, 1);
-      selectedId = null;
-      renderAll();
-      renderInfo(null);
+      clearSelection();
+      renderAreas();
+      refreshSelection();
+      save();
     });
     frag.append(del);
-
     return frag;
   }
 
-  // ---- pointer interaction (select / drag / resize) ----------------------
+  function markerForm(m) {
+    const frag = document.createDocumentFragment();
+    const h = document.createElement('h2');
+    h.textContent = 'Edit plant';
+    frag.append(h);
 
-  function toLocal(evt) {
-    const pt = svg.createSVGPoint();
-    pt.x = evt.clientX;
-    pt.y = evt.clientY;
-    return pt.matrixTransform(layer.getScreenCTM().inverse());
+    // icon picker
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'icon-grid';
+    for (const it of ICONS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'icon-btn' + (it.icon === m.icon ? ' is-active' : '');
+      b.textContent = it.icon;
+      b.title = it.label;
+      b.addEventListener('click', () => {
+        m.icon = it.icon;
+        if (!m.label) m.label = it.label;
+        syncMarker(m);
+        renderInfo();
+        save();
+      });
+      iconWrap.append(b);
+    }
+    frag.append(field('Icon', iconWrap));
+
+    const label = document.createElement('input');
+    label.type = 'text';
+    label.value = m.label || '';
+    label.addEventListener('input', () => {
+      m.label = label.value;
+      save();
+    });
+    frag.append(field('Label', label));
+
+    const radius = document.createElement('input');
+    radius.type = 'range';
+    radius.min = '1';
+    radius.max = '15';
+    radius.step = '0.5';
+    radius.value = String(m.r);
+    radius.addEventListener('input', () => {
+      m.r = Number(radius.value);
+      syncMarker(m);
+      save();
+    });
+    frag.append(field('Radius', radius));
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'danger';
+    del.textContent = 'Delete plant';
+    del.addEventListener('click', () => {
+      const i = markers.findIndex((x) => x.id === m.id);
+      if (i >= 0) markers.splice(i, 1);
+      clearSelection();
+      renderMarkers();
+      refreshSelection();
+      save();
+    });
+    frag.append(del);
+    return frag;
   }
+
+  // ---- pointer interaction ----------------------------------------------
 
   let drag = null;
 
-  function onPointerDown(evt, area) {
-    if (mode === 'view') {
-      select(area.id);
+  function dropMarker(evt) {
+    const p = toLocal(evt);
+    const m = {
+      id: uid('m-'),
+      icon: placeIcon ? placeIcon.icon : '🌱',
+      label: placeIcon ? placeIcon.label : '',
+      x: round(p.x),
+      y: round(p.y),
+      r: 3,
+    };
+    markers.push(m);
+    renderMarker(m);
+    setTool('select');
+    selectMarker(m.id);
+    save();
+  }
+
+  function onAreaDown(evt, area) {
+    if (mode === 'edit' && tool === 'place') {
+      evt.stopPropagation();
+      dropMarker(evt);
       return;
     }
-    // edit mode
-    evt.preventDefault();
-    select(area.id);
+    evt.stopPropagation();
+    if (mode === 'view') {
+      selectArea(area.id);
+      return;
+    }
+    selectArea(area.id);
     const start = toLocal(evt);
     const onHandle = evt.target.classList.contains('handle');
     drag = {
+      kind: 'area',
       area,
       mode: onHandle ? 'resize' : 'move',
-      startX: start.x,
-      startY: start.y,
+      sx: start.x,
+      sy: start.y,
       ox: area.shape.x,
       oy: area.shape.y,
       ow: area.shape.w,
@@ -454,19 +744,66 @@ const mapSrc = `${base}/map/plot-base.png`;
     svg.setPointerCapture(evt.pointerId);
   }
 
+  function onMarkerDown(evt, m) {
+    if (mode === 'edit' && tool === 'place') {
+      evt.stopPropagation();
+      dropMarker(evt);
+      return;
+    }
+    evt.stopPropagation();
+    if (mode === 'view') {
+      selectMarker(m.id);
+      return;
+    }
+    selectMarker(m.id);
+    const start = toLocal(evt);
+    const onHandle = evt.target.classList.contains('handle');
+    drag = {
+      kind: 'marker',
+      marker: m,
+      mode: onHandle ? 'resize' : 'move',
+      sx: start.x,
+      sy: start.y,
+      ox: m.x,
+      oy: m.y,
+      or: m.r,
+    };
+    svg.setPointerCapture(evt.pointerId);
+  }
+
+  // background tap: place a marker, or deselect
+  svg.addEventListener('pointerdown', (evt) => {
+    if (mode === 'edit' && tool === 'place') {
+      dropMarker(evt);
+      return;
+    }
+    clearSelection();
+  });
+
   svg.addEventListener('pointermove', (evt) => {
     if (!drag) return;
     const p = toLocal(evt);
-    const dx = p.x - drag.startX;
-    const dy = p.y - drag.startY;
-    if (drag.mode === 'move') {
-      drag.area.shape.x = round(drag.ox + dx);
-      drag.area.shape.y = round(drag.oy + dy);
+    const dx = p.x - drag.sx;
+    const dy = p.y - drag.sy;
+    if (drag.kind === 'area') {
+      if (drag.mode === 'move') {
+        drag.area.shape.x = round(drag.ox + dx);
+        drag.area.shape.y = round(drag.oy + dy);
+      } else {
+        drag.area.shape.w = round(Math.max(2, drag.ow + dx));
+        drag.area.shape.h = round(Math.max(2, drag.oh + dy));
+      }
+      syncArea(drag.area);
     } else {
-      drag.area.shape.w = round(Math.max(2, drag.ow + dx));
-      drag.area.shape.h = round(Math.max(2, drag.oh + dy));
+      if (drag.mode === 'move') {
+        drag.marker.x = round(drag.ox + dx);
+        drag.marker.y = round(drag.oy + dy);
+      } else {
+        const r = Math.hypot(p.x - drag.marker.x, p.y - drag.marker.y);
+        drag.marker.r = round(Math.max(1, r));
+      }
+      syncMarker(drag.marker);
     }
-    syncArea(drag.area);
   });
 
   function endDrag(evt) {
@@ -475,35 +812,45 @@ const mapSrc = `${base}/map/plot-base.png`;
       svg.releasePointerCapture(evt.pointerId);
     } catch {}
     drag = null;
+    save();
   }
   svg.addEventListener('pointerup', endDrag);
   svg.addEventListener('pointercancel', endDrag);
 
-  function round(n) {
-    return Math.round(n * 1000) / 1000;
-  }
-
-  // ---- mode switching + tools -------------------------------------------
+  // ---- modes + tools -----------------------------------------------------
 
   const btnView = document.getElementById('mode-view');
   const btnEdit = document.getElementById('mode-edit');
 
   function setMode(next) {
     mode = next;
+    if (next !== 'edit') setTool('select');
     btnView.classList.toggle('is-active', next === 'view');
     btnEdit.classList.toggle('is-active', next === 'edit');
     editTools.hidden = next !== 'edit';
     svg.classList.toggle('is-editing', next === 'edit');
     refreshSelection();
-    renderInfo(areas.find((a) => a.id === selectedId));
+    renderInfo();
   }
+
+  function setTool(next) {
+    tool = next;
+    if (next !== 'place') {
+      placeIcon = null;
+      placeHint.hidden = true;
+      svg.classList.remove('is-placing');
+      for (const b of palette.querySelectorAll('.icon-btn'))
+        b.classList.remove('is-active');
+    }
+    refreshSelection();
+  }
+
   btnView.addEventListener('click', () => setMode('view'));
   btnEdit.addEventListener('click', () => setMode('edit'));
 
   document.getElementById('add-area').addEventListener('click', () => {
-    const id = 'area-' + Math.random().toString(36).slice(2, 7);
     const area = {
-      id,
+      id: uid('area-'),
       name: 'New area',
       type: 'bed',
       provisional: true,
@@ -511,17 +858,67 @@ const mapSrc = `${base}/map/plot-base.png`;
     };
     areas.push(area);
     renderArea(area, areas.length);
-    select(id);
+    selectArea(area.id);
+    save();
   });
 
-  document.getElementById('export-json').addEventListener('click', async () => {
-    const out = { ...plotData, areas };
-    const text = JSON.stringify(out, null, 2);
+  // palette
+  const palette = document.getElementById('palette');
+  for (const it of ICONS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'icon-btn';
+    b.textContent = it.icon;
+    b.title = `Drop a ${it.label}`;
+    b.addEventListener('click', () => {
+      if (tool === 'place' && placeIcon?.icon === it.icon) {
+        setTool('select');
+        return;
+      }
+      tool = 'place';
+      placeIcon = it;
+      placeHint.hidden = false;
+      svg.classList.add('is-placing');
+      for (const x of palette.querySelectorAll('.icon-btn'))
+        x.classList.toggle('is-active', x === b);
+      refreshSelection();
+    });
+    palette.append(b);
+  }
+
+  // ---- save actions ------------------------------------------------------
+
+  function buildJSON() {
+    return JSON.stringify({ ...plotData, areas, markers }, null, 2);
+  }
+  document.getElementById('copy-json').addEventListener('click', async () => {
+    const text = buildJSON();
     document.getElementById('export-text').value = text;
     try {
       await navigator.clipboard.writeText(text);
     } catch {}
     exportDialog.showModal();
+  });
+  document.getElementById('download-json').addEventListener('click', () => {
+    const blob = new Blob([buildJSON()], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'areas.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  document.getElementById('discard').addEventListener('click', () => {
+    if (!confirm('Discard local changes on this device and revert to the saved repo version?'))
+      return;
+    localStorage.removeItem(STORE_KEY);
+    const fresh = JSON.parse(baselineJSON);
+    areas = fresh.areas;
+    markers = fresh.markers;
+    clearSelection();
+    renderAreas();
+    renderMarkers();
+    refreshSelection();
+    updateSaveState();
   });
 
   // ---- legend ------------------------------------------------------------
@@ -536,7 +933,13 @@ const mapSrc = `${base}/map/plot-base.png`;
     legendList.append(li);
   }
 
-  renderAll();
+  // ---- init --------------------------------------------------------------
+
+  renderAreas();
+  renderMarkers();
+  refreshSelection();
+  renderInfo();
+  updateSaveState();
 </script>
 
 <style>
@@ -550,7 +953,7 @@ const mapSrc = `${base}/map/plot-base.png`;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.8rem;
+    gap: 0.7rem;
   }
 
   .modes {
@@ -563,7 +966,7 @@ const mapSrc = `${base}/map/plot-base.png`;
   .mode {
     border: 0;
     background: transparent;
-    padding: 0.4rem 0.95rem;
+    padding: 0.45rem 1.05rem;
     font: inherit;
     cursor: pointer;
     color: var(--muted);
@@ -578,10 +981,6 @@ const mapSrc = `${base}/map/plot-base.png`;
     align-items: center;
     gap: 0.6rem;
     flex-wrap: wrap;
-  }
-  .edit-tools .hint {
-    color: var(--muted);
-    font-size: 0.82rem;
   }
 
   button {
@@ -599,6 +998,45 @@ const mapSrc = `${base}/map/plot-base.png`;
   button.danger {
     color: #a23b2b;
     border-color: #e3b8b0;
+    margin-top: 0.6rem;
+  }
+  button.ghost {
+    color: var(--muted);
+  }
+
+  .palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+  .icon-btn {
+    padding: 0.25rem 0.4rem;
+    font-size: 1.15rem;
+    line-height: 1;
+    border-radius: 8px;
+  }
+  .icon-btn.is-active {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 18%, white);
+  }
+
+  .save-state {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-left: auto;
+    font-size: 0.82rem;
+    color: var(--accent-2);
+  }
+  .save-state .dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--accent-2);
+  }
+  .save-state button {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.82rem;
   }
 
   .plot__grid {
@@ -615,7 +1053,8 @@ const mapSrc = `${base}/map/plot-base.png`;
     padding: 0.6rem;
     box-shadow: var(--shadow);
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
   }
 
   #plot-svg {
@@ -625,23 +1064,43 @@ const mapSrc = `${base}/map/plot-base.png`;
     display: block;
     touch-action: none;
   }
+  #plot-svg.is-placing {
+    cursor: crosshair;
+  }
+  #plot-svg.is-editing .area {
+    cursor: grab;
+  }
+  #plot-svg.is-editing .marker {
+    cursor: grab;
+  }
 
   .area {
     cursor: pointer;
   }
-  .area .handle {
+  .area .handle,
+  .marker .handle {
     cursor: nwse-resize;
   }
   .area.is-hover rect,
   .area.is-selected rect {
-    fill-opacity: 0.5;
+    fill-opacity: 0.48;
     stroke-width: 0.9;
   }
   .area.is-selected rect {
     stroke-dasharray: 1.6 1.1;
   }
-  #plot-svg.is-editing .area {
-    cursor: grab;
+  .marker {
+    cursor: pointer;
+  }
+  .marker.is-selected circle {
+    stroke-width: 0.9;
+    fill-opacity: 0.3;
+  }
+
+  .place-hint {
+    margin: 0.5rem 0 0;
+    color: var(--accent);
+    font-size: 0.85rem;
   }
 
   .info {
@@ -700,6 +1159,17 @@ const mapSrc = `${base}/map/plot-base.png`;
     --tag: #4f7d3f;
   }
 
+  .plant-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .plant-chip {
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+  }
+
   .plantings,
   .tasks {
     list-style: none;
@@ -745,10 +1215,18 @@ const mapSrc = `${base}/map/plot-base.png`;
     border-radius: 8px;
     background: #fff;
   }
+  .field input[type='range'] {
+    padding: 0;
+  }
   .field--check {
     flex-direction: row;
     align-items: center;
     gap: 0.5rem;
+  }
+  .icon-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
   }
 
   .legend {
@@ -801,6 +1279,7 @@ const mapSrc = `${base}/map/plot-base.png`;
     justify-content: flex-end;
   }
 
+  /* On phones the map should take most of the width. */
   @media (max-width: 760px) {
     .plot__grid {
       grid-template-columns: 1fr;
@@ -808,8 +1287,17 @@ const mapSrc = `${base}/map/plot-base.png`;
     .info {
       position: static;
     }
+    .map-wrap {
+      padding: 0.4rem;
+    }
     #plot-svg {
-      height: min(70vh, 620px);
+      width: 100%;
+      height: auto;
+      max-height: none;
+    }
+    .save-state {
+      margin-left: 0;
+      width: 100%;
     }
   }
 </style>

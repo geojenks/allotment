@@ -99,3 +99,26 @@ export interface Area {
   timeline?: TimelineEntry[];
   tasks?: PlotTask[];
 }
+
+/**
+ * A plant icon dropped on the map. Position is in the same coordinate space as
+ * `AreaShape` (millimetres in the source overlay's layer space), and `r` is the
+ * radius of its footprint / spread in those same units.
+ */
+export interface PlantMarker {
+  id: string;
+  icon: string; // emoji used as the marker glyph
+  label?: string;
+  x: number;
+  y: number;
+  r: number;
+  family?: CropFamily;
+  year?: number;
+}
+
+/** The whole plot file: src/data/areas.json. */
+export interface PlotData {
+  scaleMmPerMetre?: number;
+  areas: Area[];
+  markers?: PlantMarker[];
+}
