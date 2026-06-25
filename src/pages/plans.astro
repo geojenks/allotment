@@ -1,0 +1,303 @@
+---
+import Base from '../layouts/Base.astro';
+import areasData from '../data/areas.json';
+
+const FAMILY_LABEL: Record<string, string> = {
+  brassica: 'Brassicas',
+  legume: 'Legumes',
+  allium: 'Alliums',
+  solanaceae: 'Potato family',
+  apiaceae: 'Umbellifers',
+  cucurbit: 'Cucurbits',
+  chenopod: 'Beets & chard',
+  asparagus: 'Asparagus',
+  'cane-fruit': 'Cane fruit',
+  'bush-fruit': 'Bush fruit',
+  'tree-fruit': 'Tree fruit',
+  rhubarb: 'Rhubarb',
+  flower: 'Flowers',
+  other: 'Other',
+};
+
+// Beds are where rotation planning happens.
+const beds = areasData.areas.filter((a) => a.type === 'bed' || a.type === 'unused');
+const freeBeds = beds.filter((b) => !(b.plantings && b.plantings.length));
+
+const familyOf = (a) => [...new Set((a.plantings ?? []).map((p) => p.family))];
+
+// A simple four-course rotation as a reference (perennials sit outside it).
+const rotation = [
+  { name: 'Legumes', note: 'peas, beans — fix nitrogen', icon: '🫛' },
+  { name: 'Brassicas', note: 'cabbage, kale, PSB — follow legumes', icon: '🥦' },
+  { name: 'Roots / umbellifers', note: 'carrot, parsnip, celeriac', icon: '🥕' },
+  { name: 'Potato family', note: 'potato, tomato — then back to legumes', icon: '🥔' },
+];
+---
+
+<Base title="Allotment — Plans" active="plans">
+  <header class="page-head">
+    <p class="eyebrow">What goes where</p>
+    <h1>Plans</h1>
+    <p>
+      Plan future planting by bed. Below is what's there now and what's free; a
+      rotation &amp; companion helper is on the way to flag good and bad follow-ons.
+    </p>
+  </header>
+
+  <div class="banner card">
+    <div>
+      <strong>{freeBeds.length}</strong> bed{freeBeds.length === 1 ? '' : 's'} free to plan
+      <span class="banner__sub">
+        of {beds.length} growing beds. Perennials (asparagus, fruit) stay put and sit
+        outside rotation.
+      </span>
+    </div>
+  </div>
+
+  <h2 class="section-title">Beds</h2>
+  <ul class="grid">
+    {
+      beds.map((b) => {
+        const fams = familyOf(b);
+        const free = fams.length === 0;
+        return (
+          <li class:list={['card bed', { 'bed--free': free }]}>
+            <div class="bed__top">
+              <h3>{b.name}</h3>
+              <span class:list={['tag', free ? 'tag--free' : 'tag--full']}>
+                {free ? 'Free' : 'Planted'}
+              </span>
+            </div>
+            {b.plantings && b.plantings.length > 0 ? (
+              <ul class="crops">
+                {b.plantings.map((p) => (
+                  <li>
+                    <span class="crop">{p.crop}</span>
+                    <span class="fam">{FAMILY_LABEL[p.family] ?? p.family}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p class="bed__free">Open ground — ready for this season's plan.</p>
+            )}
+            {b.notes && <p class="bed__note">{b.notes}</p>}
+          </li>
+        );
+      })
+    }
+  </ul>
+
+  <div class="rotation card">
+    <div class="rotation__head">
+      <h2>Rotation cycle</h2>
+      <span class="pill">reference</span>
+    </div>
+    <p class="rotation__intro">
+      A simple four-course rotation. Move each bed one step along each year to avoid
+      building up family-specific pests and diseases.
+    </p>
+    <ol class="cycle">
+      {
+        rotation.map((r, i) => (
+          <li>
+            <span class="cycle__icon">{r.icon}</span>
+            <span class="cycle__name">{r.name}</span>
+            <span class="cycle__note">{r.note}</span>
+            {i < rotation.length - 1 && <span class="cycle__arrow" aria-hidden="true">→</span>}
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+
+  <div class="soon card">
+    <span class="pill">coming soon</span>
+    <p>
+      An interactive planner: pick a crop for a bed and get instant flags — “you grew
+      brassicas here last year” — plus companion suggestions, all from the family and
+      year data already recorded against each planting.
+    </p>
+  </div>
+</Base>
+
+<style>
+  .banner {
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.6rem;
+    border-left: 4px solid var(--green);
+    font-size: 1.02rem;
+  }
+  .banner strong {
+    color: var(--green-700);
+    font-size: 1.15rem;
+  }
+  .banner__sub {
+    display: block;
+    color: var(--muted);
+    font-size: 0.88rem;
+    margin-top: 0.15rem;
+  }
+
+  .section-title {
+    font-size: 1.3rem;
+    margin: 0 0 0.9rem;
+  }
+  .grid {
+    list-style: none;
+    margin: 0 0 2rem;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+  }
+  .bed {
+    padding: 1rem 1.1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .bed--free {
+    background: linear-gradient(180deg, var(--green-100) 0%, var(--panel) 60%);
+  }
+  .bed__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .bed__top h3 {
+    font-size: 1.08rem;
+  }
+  .tag {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.16rem 0.55rem;
+    border-radius: 999px;
+  }
+  .tag--free {
+    color: var(--green-700);
+    background: var(--green-100);
+  }
+  .tag--full {
+    color: var(--muted);
+    background: var(--paper-2);
+  }
+  .crops {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .crops li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+  .crop {
+    font-weight: 600;
+  }
+  .fam {
+    font-size: 0.76rem;
+    color: var(--muted);
+    background: var(--paper-2);
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .bed__free {
+    margin: 0;
+    color: var(--green-700);
+    font-size: 0.92rem;
+  }
+  .bed__note {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+
+  .rotation {
+    padding: 1.2rem 1.3rem;
+    margin-bottom: 1.4rem;
+  }
+  .rotation__head {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.4rem;
+  }
+  .rotation__head h2 {
+    font-size: 1.2rem;
+  }
+  .rotation__intro {
+    margin: 0 0 1rem;
+    color: var(--ink-soft);
+    max-width: 62ch;
+  }
+  .cycle {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+  .cycle li {
+    position: relative;
+    flex: 1 1 180px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 0.6rem;
+    align-items: center;
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 0.7rem 0.85rem;
+  }
+  .cycle__icon {
+    grid-row: 1 / 3;
+    font-size: 1.5rem;
+  }
+  .cycle__name {
+    font-weight: 700;
+  }
+  .cycle__note {
+    grid-column: 2;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .cycle__arrow {
+    position: absolute;
+    right: -0.55rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--green);
+    font-weight: 700;
+    z-index: 1;
+  }
+
+  .soon {
+    padding: 1.1rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+    border-style: dashed;
+  }
+  .soon p {
+    margin: 0;
+    color: var(--ink-soft);
+    max-width: 64ch;
+  }
+
+  @media (max-width: 560px) {
+    .cycle__arrow {
+      display: none;
+    }
+  }
+</style>

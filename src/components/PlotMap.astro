@@ -1,77 +1,70 @@
 ---
 import plotData from '../data/areas.json';
 
-// BASE_URL may be "/allotment" (no trailing slash) or "/", so join safely.
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const mapSrc = `${base}/map/plot-base.png`;
-
-// Where "Save to website" commits to. Update if you rename the repo.
 const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/data/areas.json' };
 ---
 
-<section class="plot">
+<section class="plot" id="plot-root">
   <div class="plot__bar">
     <div class="modes" role="group" aria-label="Map mode">
       <button id="mode-view" class="mode is-active" type="button">View</button>
       <button id="mode-edit" class="mode" type="button">Edit</button>
     </div>
 
-    <button id="zoom-btn" type="button" hidden></button>
+    <button id="zoom-btn" type="button" class="ctl" hidden></button>
 
     <div id="edit-tools" class="edit-tools" hidden>
-      <button id="add-area" type="button">+ Area</button>
+      <button id="add-area" type="button" class="ctl">+ Area</button>
       <div id="palette-wrap" class="palette-wrap" hidden>
-        <span class="palette-label">Drop a plant:</span>
+        <span class="palette-label">Drop a plant</span>
         <div id="palette" class="palette" aria-label="Plant icons"></div>
       </div>
     </div>
 
     <div id="save-state" class="save-state" hidden>
-      <span class="dot"></span>
-      <span class="save-state__label">Saved on this device</span>
-      <button id="save-web" type="button" class="primary">Save to website</button>
-      <button id="download-json" type="button">Download</button>
-      <button id="copy-json" type="button">Copy</button>
-      <button id="discard" type="button" class="ghost">Discard</button>
+      <span class="save-state__label">Unsaved</span>
+      <button id="save-web" type="button" class="ctl ctl--primary">Save to website</button>
+      <button id="download-json" type="button" class="ctl">Download</button>
+      <button id="copy-json" type="button" class="ctl">Copy</button>
+      <button id="discard" type="button" class="ctl ctl--ghost">Discard</button>
       <span id="web-status" class="web-status"></span>
     </div>
   </div>
 
   <div class="plot__grid">
-    <div class="map-wrap">
-      <svg
-        id="plot-svg"
-        viewBox="0 0 54.955101 153.95511"
-        xmlns="http://www.w3.org/2000/svg"
-        role="img"
-        aria-label="Interactive map of the allotment plot"
-      >
-        <defs>
-          <clipPath id="mapclip" clipPathUnits="userSpaceOnUse">
-            <rect
-              width="54.955101"
-              height="153.95511"
-              x="98.595917"
-              y="49.702042"
-              transform="rotate(135.6319)"></rect>
-          </clipPath>
-        </defs>
-        <!-- Same coordinate system as figures/plot_overlay.svg so areas line up. -->
-        <g transform="translate(-98.595917,-49.702042)">
-          <image
-            href={mapSrc}
-            width="152.39999"
-            height="136.78958"
-            preserveAspectRatio="none"
-            x="-259.4986"
-            y="-73.784225"
-            transform="rotate(-135.6319)"
-            clip-path="url(#mapclip)"></image>
-          <g id="area-layer"></g>
-          <g id="marker-layer"></g>
-        </g>
-      </svg>
-      <p id="place-hint" class="place-hint" hidden>Tap inside the bed to place the plant.</p>
+    <div class="map-card" id="map-card">
+      <div class="map-stage">
+        <svg
+          id="plot-svg"
+          viewBox="0 0 54.955101 153.95511"
+          xmlns="http://www.w3.org/2000/svg"
+          role="img"
+          aria-label="Interactive map of the allotment plot"
+        >
+          <defs>
+            <clipPath id="mapclip" clipPathUnits="userSpaceOnUse">
+              <rect width="54.955101" height="153.95511" x="98.595917" y="49.702042" transform="rotate(135.6319)"></rect>
+            </clipPath>
+          </defs>
+          <g transform="translate(-98.595917,-49.702042)">
+            <image href={mapSrc} width="152.39999" height="136.78958" preserveAspectRatio="none"
+              x="-259.4986" y="-73.784225" transform="rotate(-135.6319)" clip-path="url(#mapclip)"></image>
+            <g id="area-layer"></g>
+            <g id="marker-layer"></g>
+          </g>
+        </svg>
+
+        <div class="map-controls">
+          <button id="zin" type="button" title="Zoom in" aria-label="Zoom in">+</button>
+          <button id="zout" type="button" title="Zoom out" aria-label="Zoom out">−</button>
+          <button id="zreset" type="button" title="Whole plot" aria-label="Whole plot">⤢</button>
+          <button id="fs" type="button" title="Fullscreen" aria-label="Fullscreen">⤡</button>
+        </div>
+
+        <p id="place-hint" class="place-hint" hidden>Tap inside to place the plant</p>
+      </div>
     </div>
 
     <aside id="info" class="info">
@@ -87,11 +80,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   <dialog id="export-dialog">
     <form method="dialog">
       <h3>Plot JSON</h3>
-      <p>
-        Copied to your clipboard. To save permanently you can paste this into
-        <code>src/data/areas.json</code> and push — or just use
-        <strong>Save to website</strong>, which does it for you.
-      </p>
+      <p>Copied to your clipboard. Paste into <code>src/data/areas.json</code> and push — or just use <strong>Save to website</strong>.</p>
       <textarea id="export-text" rows="12" readonly></textarea>
       <menu><button value="close">Close</button></menu>
     </form>
@@ -100,68 +89,48 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
 
 <script define:vars={{ plotData, repo }}>
   const TYPE_META = {
-    bed: { color: '#c98a3b', label: 'Bed' },
-    tree: { color: '#5f8a36', label: 'Tree' },
-    bushes: { color: '#86a948', label: 'Bushes' },
-    structure: { color: '#7c8aa0', label: 'Structure' },
-    water: { color: '#3f86ad', label: 'Water' },
-    wild: { color: '#9a7b4f', label: 'Wild / rough' },
-    unused: { color: '#a9a496', label: 'Unused / open' },
-    boundary: { color: '#8a8577', label: 'Boundary' },
+    bed: { color: '#c98a3b', label: 'Bed' }, tree: { color: '#5f8a36', label: 'Tree' },
+    bushes: { color: '#86a948', label: 'Bushes' }, structure: { color: '#7c8aa0', label: 'Structure' },
+    water: { color: '#3f86ad', label: 'Water' }, wild: { color: '#9a7b4f', label: 'Wild / rough' },
+    unused: { color: '#a9a496', label: 'Unused / open' }, boundary: { color: '#8a8577', label: 'Boundary' },
   };
-  const STATUS_LABEL = {
-    planned: 'Planned', sown: 'Sown', growing: 'Growing',
-    harvesting: 'Harvesting', done: 'Done', volunteer: 'Self-seeded',
-  };
+  const STATUS_LABEL = { planned: 'Planned', sown: 'Sown', growing: 'Growing', harvesting: 'Harvesting', done: 'Done', volunteer: 'Self-seeded' };
   const ICONS = [
-    { icon: '🥔', label: 'Potato' }, { icon: '🥦', label: 'Brassica' },
-    { icon: '🧅', label: 'Onion' }, { icon: '🧄', label: 'Garlic' },
-    { icon: '🥕', label: 'Carrot / root' }, { icon: '🥬', label: 'Leafy / salad' },
-    { icon: '🍅', label: 'Tomato' }, { icon: '🫛', label: 'Peas / beans' },
-    { icon: '🎃', label: 'Squash' }, { icon: '🌽', label: 'Sweetcorn' },
-    { icon: '🍓', label: 'Strawberry' }, { icon: '🫐', label: 'Berry' },
-    { icon: '🌿', label: 'Herb' }, { icon: '🌷', label: 'Flower' },
-    { icon: '🌱', label: 'Seedling' },
+    { icon: '🥔', label: 'Potato' }, { icon: '🥦', label: 'Brassica' }, { icon: '🧅', label: 'Onion' },
+    { icon: '🧄', label: 'Garlic' }, { icon: '🥕', label: 'Carrot / root' }, { icon: '🥬', label: 'Leafy / salad' },
+    { icon: '🍅', label: 'Tomato' }, { icon: '🫛', label: 'Peas / beans' }, { icon: '🎃', label: 'Squash' },
+    { icon: '🌽', label: 'Sweetcorn' }, { icon: '🍓', label: 'Strawberry' }, { icon: '🫐', label: 'Berry' },
+    { icon: '🌿', label: 'Herb' }, { icon: '🌷', label: 'Flower' }, { icon: '🌱', label: 'Seedling' },
   ];
 
   const SVGNS = 'http://www.w3.org/2000/svg';
   const STORE_KEY = 'allotment:plot:v1';
   const TOKEN_KEY = 'allotment:gh-token';
-  const VB = { x: 0, y: 0, w: 54.955101, h: 153.95511 };
-  const ASPECT = VB.w / VB.h;
-  const TX = -98.595917, TY = -49.702042; // layer translate
+  const PLOT = { x: 0, y: 0, w: 54.955101, h: 153.95511 };
+  const TX = -98.595917, TY = -49.702042;
 
   // ---- state + persistence ----------------------------------------------
-
   const baseline = { areas: plotData.areas, markers: plotData.markers || [] };
   let baselineJSON = JSON.stringify(baseline);
-
   function loadState() {
     try {
       const raw = localStorage.getItem(STORE_KEY);
-      if (raw) {
-        const p = JSON.parse(raw);
-        if (p && Array.isArray(p.areas)) return { areas: p.areas, markers: p.markers || [] };
-      }
+      if (raw) { const p = JSON.parse(raw); if (p && Array.isArray(p.areas)) return { areas: p.areas, markers: p.markers || [] }; }
     } catch {}
     return JSON.parse(baselineJSON);
   }
-  const state = loadState();
-  let areas = state.areas;
-  let markers = state.markers;
-
+  const st = loadState();
+  let areas = st.areas, markers = st.markers;
   let saveTimer = null;
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      try { localStorage.setItem(STORE_KEY, JSON.stringify({ areas, markers })); } catch {}
-      updateSaveState();
-    }, 150);
+    saveTimer = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify({ areas, markers })); } catch {} updateSaveState(); }, 150);
   }
-  function isDirty() { return JSON.stringify({ areas, markers }) !== baselineJSON; }
+  const isDirty = () => JSON.stringify({ areas, markers }) !== baselineJSON;
 
-  // ---- element refs ------------------------------------------------------
-
+  // ---- refs --------------------------------------------------------------
+  const root = document.getElementById('plot-root');
+  const mapCard = document.getElementById('map-card');
   const svg = document.getElementById('plot-svg');
   const areaLayer = document.getElementById('area-layer');
   const markerLayer = document.getElementById('marker-layer');
@@ -177,512 +146,374 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   const saveLabel = saveStateEl.querySelector('.save-state__label');
   const webStatus = document.getElementById('web-status');
 
-  let mode = 'view';   // 'view' | 'edit'
-  let tool = 'select'; // 'select' | 'place'
-  let placeIcon = null;
-  let selected = null; // { kind:'area'|'marker', id }
-  let zoomAreaId = null;
-  const areaNodes = new Map();
-  const markerNodes = new Map();
+  let mode = 'view', tool = 'select', placeIcon = null;
+  let selected = null, focusedAreaId = null;
+  const areaNodes = new Map(), markerNodes = new Map();
 
-  // ---- helpers -----------------------------------------------------------
+  // ---- geometry / pan-zoom ----------------------------------------------
+  let vb = { ...PLOT };
+  let overviewVB = { ...PLOT };
+  let minW = 4, maxW = PLOT.w;
 
-  function el(name, attrs) {
-    const n = document.createElementNS(SVGNS, name);
-    for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, v);
-    return n;
+  const elAspect = () => {
+    const r = svg.getBoundingClientRect();
+    return r.height > 0 ? r.width / r.height : PLOT.w / PLOT.h;
+  };
+  function fitBounds(b, pad = 0) {
+    const EA = elAspect();
+    let w = b.w + pad * 2, h = b.h + pad * 2;
+    if (w / h < EA) w = h * EA; else h = w / EA;
+    return { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h };
   }
-  const colorFor = (a) => (TYPE_META[a.type] || TYPE_META.unused).color;
-  const uid = (p) => p + Math.random().toString(36).slice(2, 8);
-  function toLocal(evt) {
-    const pt = svg.createSVGPoint();
-    pt.x = evt.clientX; pt.y = evt.clientY;
-    return pt.matrixTransform(areaLayer.getScreenCTM().inverse());
+  function relayout() {
+    overviewVB = fitBounds(PLOT, 1);
+    maxW = overviewVB.w; minW = overviewVB.w / 14;
+    if (focusedAreaId) { const a = areas.find((x) => x.id === focusedAreaId); if (a) setVB(focusVB(a)); }
+    else if (vb.w < overviewVB.w * 0.9) { /* user has zoomed in — keep it */ clampPan(); writeVB(); }
+    else setVB(overviewVB);
   }
-  const round = (n) => Math.round(n * 1000) / 1000;
-  function markersInArea(a) {
-    return markers.filter((m) =>
-      m.x >= a.shape.x && m.x <= a.shape.x + a.shape.w &&
-      m.y >= a.shape.y && m.y <= a.shape.y + a.shape.h);
-  }
-
-  // ---- zoom --------------------------------------------------------------
-
-  function areaViewBox(a) {
-    const pad = 2 + Math.max(a.shape.w, a.shape.h) * 0.12;
-    let x = a.shape.x + TX - pad, y = a.shape.y + TY - pad;
-    let w = a.shape.w + pad * 2, h = a.shape.h + pad * 2;
-    if (w / h > ASPECT) { const nh = w / ASPECT; y -= (nh - h) / 2; h = nh; }
-    else { const nw = h * ASPECT; x -= (nw - w) / 2; w = nw; }
-    return { x, y, w, h };
+  function focusVB(a) {
+    return fitBounds({ x: a.shape.x + TX, y: a.shape.y + TY, w: a.shape.w, h: a.shape.h }, 0.8);
   }
   let raf = null;
-  function setViewBox(t, animate) {
+  function readVB() { const c = svg.viewBox.baseVal; vb = { x: c.x, y: c.y, w: c.width, h: c.height }; }
+  function writeVB() { svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
+  function setVB(target, animate) {
     cancelAnimationFrame(raf);
-    if (!animate) { svg.setAttribute('viewBox', `${t.x} ${t.y} ${t.w} ${t.h}`); return; }
-    const c = svg.viewBox.baseVal;
-    const from = { x: c.x, y: c.y, w: c.width, h: c.height };
-    const t0 = performance.now(), dur = 260;
+    if (!animate) { vb = { ...target }; clampPan(); writeVB(); return; }
+    const from = { ...vb }, t0 = performance.now(), dur = 280;
     const tick = (now) => {
-      const k = Math.min(1, (now - t0) / dur);
-      const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-      svg.setAttribute('viewBox',
-        `${from.x + (t.x - from.x) * e} ${from.y + (t.y - from.y) * e} ` +
-        `${from.w + (t.w - from.w) * e} ${from.h + (t.h - from.h) * e}`);
-      if (k < 1) raf = requestAnimationFrame(tick);
+      const k = Math.min(1, (now - t0) / dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      vb = { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e,
+        w: from.w + (target.w - from.w) * e, h: from.h + (target.h - from.h) * e };
+      writeVB();
+      if (k < 1) raf = requestAnimationFrame(tick); else { vb = { ...target }; clampPan(); writeVB(); }
     };
     raf = requestAnimationFrame(tick);
   }
+  function clampPan() {
+    const mx = vb.w * 0.3, my = vb.h * 0.3;
+    const minX = overviewVB.x - mx, maxX = overviewVB.x + overviewVB.w - vb.w + mx;
+    const minY = overviewVB.y - my, maxY = overviewVB.y + overviewVB.h - vb.h + my;
+    vb.x = maxX < minX ? (minX + maxX) / 2 : Math.min(Math.max(vb.x, minX), maxX);
+    vb.y = maxY < minY ? (minY + maxY) / 2 : Math.min(Math.max(vb.y, minY), maxY);
+  }
+  function applyZoom(baseVB, newW, fx, fy) {
+    newW = Math.min(Math.max(newW, minW), maxW);
+    const ratio = newW / baseVB.w;
+    vb = { w: newW, h: baseVB.h * ratio, x: fx - (fx - baseVB.x) * ratio, y: fy - (fy - baseVB.y) * ratio };
+    clampPan(); writeVB();
+  }
+  function screenToRoot(cx, cy) {
+    const pt = svg.createSVGPoint(); pt.x = cx; pt.y = cy;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  function toLocal(cx, cy) {
+    const pt = svg.createSVGPoint(); pt.x = cx; pt.y = cy;
+    return pt.matrixTransform(areaLayer.getScreenCTM().inverse());
+  }
+
   function zoomToArea(id) {
-    const a = areas.find((x) => x.id === id);
-    if (!a) return;
-    zoomAreaId = id;
-    setViewBox(areaViewBox(a), true);
-    refreshChrome();
+    const a = areas.find((x) => x.id === id); if (!a) return;
+    focusedAreaId = id; setVB(focusVB(a), true); refreshChrome();
   }
   function zoomOut() {
-    zoomAreaId = null;
-    setTool('select');
-    setViewBox(VB, true);
-    refreshChrome();
+    focusedAreaId = null; setTool('select'); setVB(overviewVB, true); refreshChrome();
   }
 
-  // ---- rendering: areas --------------------------------------------------
+  // ---- helpers -----------------------------------------------------------
+  function el(name, attrs) { const n = document.createElementNS(SVGNS, name); for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, v); return n; }
+  const colorFor = (a) => (TYPE_META[a.type] || TYPE_META.unused).color;
+  const uid = (p) => p + Math.random().toString(36).slice(2, 8);
+  const round = (n) => Math.round(n * 1000) / 1000;
+  const markersInArea = (a) => markers.filter((m) => m.x >= a.shape.x && m.x <= a.shape.x + a.shape.w && m.y >= a.shape.y && m.y <= a.shape.y + a.shape.h);
 
-  function renderAreas() {
-    areaLayer.replaceChildren();
-    areaNodes.clear();
-    areas.forEach((a, i) => renderArea(a, i + 1));
-    updatePlantCounts();
-  }
+  // ---- render areas ------------------------------------------------------
+  function renderAreas() { areaLayer.replaceChildren(); areaNodes.clear(); areas.forEach((a, i) => renderArea(a, i + 1)); updatePlantCounts(); }
   function renderArea(area, number) {
     const c = colorFor(area), s = area.shape;
     const g = el('g', { class: 'area', 'data-id': area.id });
-    const rect = el('rect', { x: s.x, y: s.y, width: s.w, height: s.h, rx: 0.8,
-      fill: c, 'fill-opacity': 0.28, stroke: c, 'stroke-width': 0.55 });
+    const rect = el('rect', { x: s.x, y: s.y, width: s.w, height: s.h, rx: 0.8, fill: c, 'fill-opacity': 0.26, stroke: c, 'stroke-width': 0.5 });
     const badge = el('circle', { cx: s.x + 2.4, cy: s.y + 2.4, r: 1.8, fill: c, stroke: '#fff', 'stroke-width': 0.32 });
-    const badgeText = el('text', { x: s.x + 2.4, y: s.y + 2.4, 'text-anchor': 'middle',
-      'dominant-baseline': 'central', 'font-size': 2.1, fill: '#fff', 'font-family': 'system-ui, sans-serif' });
+    const badgeText = el('text', { x: s.x + 2.4, y: s.y + 2.4, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 2.1, fill: '#fff', 'font-family': 'system-ui, sans-serif' });
     badgeText.textContent = String(number);
-    const count = el('text', { x: s.x + s.w - 1, y: s.y + s.h - 1, 'text-anchor': 'end',
-      'font-size': 2.6, fill: '#1f3a17', stroke: '#fff', 'stroke-width': 0.5,
-      'paint-order': 'stroke', 'font-family': 'system-ui, sans-serif', class: 'plant-count' });
-    const handle = el('rect', { x: s.x + s.w - 1.6, y: s.y + s.h - 1.6, width: 1.6, height: 1.6,
-      fill: '#fff', stroke: c, 'stroke-width': 0.4, class: 'handle' });
+    const count = el('text', { x: s.x + s.w - 1, y: s.y + s.h - 1, 'text-anchor': 'end', 'font-size': 2.6, fill: '#1f3a17', stroke: '#fff', 'stroke-width': 0.5, 'paint-order': 'stroke', 'font-family': 'system-ui, sans-serif', class: 'plant-count' });
+    const handle = el('rect', { x: s.x + s.w - 1.6, y: s.y + s.h - 1.6, width: 1.6, height: 1.6, fill: '#fff', stroke: c, 'stroke-width': 0.4, class: 'handle' });
     handle.style.display = 'none';
-
     g.append(rect, badge, badgeText, count, handle);
     areaLayer.append(g);
     areaNodes.set(area.id, { group: g, rect, badge, badgeText, count, handle, number });
-
     g.addEventListener('mouseenter', () => g.classList.add('is-hover'));
     g.addEventListener('mouseleave', () => g.classList.remove('is-hover'));
-    g.addEventListener('pointerdown', (e) => onAreaDown(e, area));
-    g.addEventListener('dblclick', (e) => { e.preventDefault(); zoomToArea(area.id); });
   }
   function syncArea(area) {
-    const n = areaNodes.get(area.id); if (!n) return;
-    const s = area.shape;
-    n.rect.setAttribute('x', s.x); n.rect.setAttribute('y', s.y);
-    n.rect.setAttribute('width', s.w); n.rect.setAttribute('height', s.h);
+    const n = areaNodes.get(area.id); if (!n) return; const s = area.shape;
+    n.rect.setAttribute('x', s.x); n.rect.setAttribute('y', s.y); n.rect.setAttribute('width', s.w); n.rect.setAttribute('height', s.h);
     n.badge.setAttribute('cx', s.x + 2.4); n.badge.setAttribute('cy', s.y + 2.4);
     n.badgeText.setAttribute('x', s.x + 2.4); n.badgeText.setAttribute('y', s.y + 2.4);
     n.count.setAttribute('x', s.x + s.w - 1); n.count.setAttribute('y', s.y + s.h - 1);
     n.handle.setAttribute('x', s.x + s.w - 1.6); n.handle.setAttribute('y', s.y + s.h - 1.6);
-    const c = colorFor(area);
-    for (const node of [n.rect, n.badge, n.handle]) node.setAttribute('stroke', c);
+    const c = colorFor(area); for (const nd of [n.rect, n.badge, n.handle]) nd.setAttribute('stroke', c);
     n.rect.setAttribute('fill', c); n.badge.setAttribute('fill', c);
   }
   function updatePlantCounts() {
-    for (const [id, n] of areaNodes) {
-      const a = areas.find((x) => x.id === id);
-      const c = a ? markersInArea(a).length : 0;
-      n.count.textContent = c ? `🌱${c}` : '';
-    }
+    for (const [id, n] of areaNodes) { const a = areas.find((x) => x.id === id); const c = a ? markersInArea(a).length : 0; n.count.textContent = c ? `🌱${c}` : ''; }
   }
 
-  // ---- rendering: markers ------------------------------------------------
-
-  function renderMarkers() {
-    markerLayer.replaceChildren();
-    markerNodes.clear();
-    markers.forEach((m) => renderMarker(m));
-  }
+  // ---- render markers ----------------------------------------------------
+  function renderMarkers() { markerLayer.replaceChildren(); markerNodes.clear(); markers.forEach((m) => renderMarker(m)); }
   function renderMarker(m) {
     const g = el('g', { class: 'marker', 'data-id': m.id });
-    const circle = el('circle', { cx: m.x, cy: m.y, r: m.r, fill: '#3f7d2f',
-      'fill-opacity': 0.16, stroke: '#3f7d2f', 'stroke-width': 0.4 });
-    const glyph = el('text', { x: m.x, y: m.y, 'text-anchor': 'middle',
-      'dominant-baseline': 'central', 'font-size': Math.max(2.4, Math.min(m.r * 1.4, 7)) });
+    const circle = el('circle', { cx: m.x, cy: m.y, r: m.r, fill: '#3f7d2f', 'fill-opacity': 0.16, stroke: '#3f7d2f', 'stroke-width': 0.4 });
+    const glyph = el('text', { x: m.x, y: m.y, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': Math.max(2.4, Math.min(m.r * 1.4, 7)) });
     glyph.textContent = m.icon;
-    const handle = el('circle', { cx: m.x + m.r, cy: m.y, r: 1, fill: '#fff',
-      stroke: '#3f7d2f', 'stroke-width': 0.45, class: 'handle' });
+    const handle = el('circle', { cx: m.x + m.r, cy: m.y, r: 1, fill: '#fff', stroke: '#3f7d2f', 'stroke-width': 0.45, class: 'handle' });
     handle.style.display = 'none';
-    g.append(circle, glyph, handle);
-    markerLayer.append(g);
+    g.append(circle, glyph, handle); markerLayer.append(g);
     markerNodes.set(m.id, { group: g, circle, glyph, handle });
-    g.addEventListener('pointerdown', (e) => onMarkerDown(e, m));
   }
   function syncMarker(m) {
     const n = markerNodes.get(m.id); if (!n) return;
     n.circle.setAttribute('cx', m.x); n.circle.setAttribute('cy', m.y); n.circle.setAttribute('r', m.r);
     n.glyph.setAttribute('x', m.x); n.glyph.setAttribute('y', m.y);
-    n.glyph.setAttribute('font-size', Math.max(2.4, Math.min(m.r * 1.4, 7)));
-    n.glyph.textContent = m.icon;
+    n.glyph.setAttribute('font-size', Math.max(2.4, Math.min(m.r * 1.4, 7))); n.glyph.textContent = m.icon;
     n.handle.setAttribute('cx', m.x + m.r); n.handle.setAttribute('cy', m.y);
   }
 
   // ---- selection ---------------------------------------------------------
-
   function refreshSelection() {
-    for (const [id, n] of areaNodes) {
-      const sel = selected?.kind === 'area' && selected.id === id;
-      n.group.classList.toggle('is-selected', sel);
-      n.handle.style.display = mode === 'edit' && tool === 'select' && sel ? '' : 'none';
-    }
-    for (const [id, n] of markerNodes) {
-      const sel = selected?.kind === 'marker' && selected.id === id;
-      n.group.classList.toggle('is-selected', sel);
-      n.handle.style.display = mode === 'edit' && tool === 'select' && sel ? '' : 'none';
-    }
+    for (const [id, n] of areaNodes) { const s = selected?.kind === 'area' && selected.id === id; n.group.classList.toggle('is-selected', s); n.handle.style.display = mode === 'edit' && tool === 'select' && s ? '' : 'none'; }
+    for (const [id, n] of markerNodes) { const s = selected?.kind === 'marker' && selected.id === id; n.group.classList.toggle('is-selected', s); n.handle.style.display = mode === 'edit' && tool === 'select' && s ? '' : 'none'; }
   }
   function selectArea(id) { selected = { kind: 'area', id }; refreshSelection(); refreshChrome(); renderInfo(); }
   function selectMarker(id) { selected = { kind: 'marker', id }; refreshSelection(); refreshChrome(); renderInfo(); }
   function clearSelection() { selected = null; refreshSelection(); refreshChrome(); renderInfo(); }
 
   // ---- info panel --------------------------------------------------------
-
-  function tag(text, cls) {
-    const s = document.createElement('span');
-    s.className = 'tag ' + (cls || ''); s.textContent = text; return s;
-  }
+  function tag(text, cls) { const s = document.createElement('span'); s.className = 'tag ' + (cls || ''); s.textContent = text; return s; }
   function dateRange(from, to) {
     const fmt = (d) => new Date(d).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-    if (from && to) return `${fmt(from)} – ${fmt(to)}`;
-    if (from) return `from ${fmt(from)}`;
-    if (to) return `until ${fmt(to)}`;
-    return '';
+    if (from && to) return `${fmt(from)} – ${fmt(to)}`; if (from) return `from ${fmt(from)}`; if (to) return `until ${fmt(to)}`; return '';
   }
-  function emptyInfo(msg) {
-    info.replaceChildren();
-    const p = document.createElement('p'); p.className = 'info__empty'; p.textContent = msg; info.append(p);
-  }
+  function emptyInfo(msg) { info.replaceChildren(); const p = document.createElement('p'); p.className = 'info__empty'; p.textContent = msg; info.append(p); }
   function renderInfo() {
-    if (!selected) {
-      emptyInfo(mode === 'edit'
-        ? 'Tap an area to edit or zoom in. Zoom into a bed to drop plant icons.'
-        : "Tap an area on the plan to see what's there.");
-      return;
-    }
-    if (selected.kind === 'marker') {
-      const m = markers.find((x) => x.id === selected.id);
-      if (!m) return emptyInfo('Select something on the plan.');
-      return mode === 'edit' ? info.replaceChildren(markerForm(m)) : renderMarkerInfo(m);
-    }
-    const a = areas.find((x) => x.id === selected.id);
-    if (!a) return emptyInfo('Select something on the plan.');
+    if (!selected) { emptyInfo(mode === 'edit' ? 'Tap an area to edit or zoom in. Zoom into a bed to drop plant icons.' : "Tap an area on the plan to see what's there."); return; }
+    if (selected.kind === 'marker') { const m = markers.find((x) => x.id === selected.id); if (!m) return emptyInfo('Select something.'); return mode === 'edit' ? info.replaceChildren(markerForm(m)) : renderMarkerInfo(m); }
+    const a = areas.find((x) => x.id === selected.id); if (!a) return emptyInfo('Select something.');
     return mode === 'edit' ? info.replaceChildren(areaForm(a)) : renderAreaInfo(a);
   }
   function renderAreaInfo(area) {
     info.replaceChildren();
     const meta = TYPE_META[area.type] || TYPE_META.unused;
     const h = document.createElement('h2'); h.textContent = area.name; info.append(h);
-
     const tags = document.createElement('div'); tags.className = 'tags';
     const t = tag(meta.label); t.style.setProperty('--tag', meta.color); tags.append(t);
     if (area.provisional) tags.append(tag('name unconfirmed', 'tag--warn'));
     info.append(tags);
-
-    if (zoomAreaId !== area.id) {
-      const z = document.createElement('button');
-      z.type = 'button'; z.className = 'zoom-link'; z.textContent = '🔍 Zoom in to add / see plants';
-      z.addEventListener('click', () => zoomToArea(area.id));
-      info.append(z);
+    if (focusedAreaId !== area.id) {
+      const z = document.createElement('button'); z.type = 'button'; z.className = 'zoom-link'; z.textContent = '🔍 Zoom in to add / see plants';
+      z.addEventListener('click', () => zoomToArea(area.id)); info.append(z);
     }
-    if (area.notes) {
-      const p = document.createElement('p'); p.className = 'notes'; p.textContent = area.notes; info.append(p);
-    }
-
+    if (area.notes) { const p = document.createElement('p'); p.className = 'notes'; p.textContent = area.notes; info.append(p); }
     const inArea = markersInArea(area);
     if (inArea.length) {
       const hh = document.createElement('h3'); hh.textContent = 'Plants here'; info.append(hh);
       const row = document.createElement('div'); row.className = 'plant-chips';
-      for (const m of inArea) {
-        const chip = document.createElement('button');
-        chip.type = 'button'; chip.className = 'plant-chip';
-        chip.textContent = `${m.icon} ${m.label || ''}`.trim();
-        chip.addEventListener('click', () => { if (zoomAreaId !== area.id) zoomToArea(area.id); selectMarker(m.id); });
-        row.append(chip);
-      }
+      for (const m of inArea) { const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'plant-chip'; chip.textContent = `${m.icon} ${m.label || ''}`.trim(); chip.addEventListener('click', () => { if (focusedAreaId !== area.id) zoomToArea(area.id); selectMarker(m.id); }); row.append(chip); }
       info.append(row);
     }
-
     if (area.plantings?.length) {
       const hh = document.createElement('h3'); hh.textContent = 'Planted'; info.append(hh);
       const ul = document.createElement('ul'); ul.className = 'plantings';
       for (const p of area.plantings) {
-        const li = document.createElement('li');
-        const title = document.createElement('strong');
-        title.textContent = p.variety ? `${p.crop} — ${p.variety}` : p.crop; li.append(title);
-        const meta2 = document.createElement('div'); meta2.className = 'planting-meta';
-        meta2.append(tag(STATUS_LABEL[p.status] || p.status, 'tag--soft'));
-        const range = dateRange(p.harvestFrom, p.harvestTo);
-        if (range) { const r = document.createElement('span'); r.className = 'muted'; r.textContent = `harvest ${range}`; meta2.append(r); }
-        li.append(meta2);
-        if (p.notes) { const n = document.createElement('div'); n.className = 'muted small'; n.textContent = p.notes; li.append(n); }
-        ul.append(li);
+        const li = document.createElement('li'); const title = document.createElement('strong'); title.textContent = p.variety ? `${p.crop} — ${p.variety}` : p.crop; li.append(title);
+        const meta2 = document.createElement('div'); meta2.className = 'planting-meta'; meta2.append(tag(STATUS_LABEL[p.status] || p.status, 'tag--soft'));
+        const range = dateRange(p.harvestFrom, p.harvestTo); if (range) { const r = document.createElement('span'); r.className = 'muted'; r.textContent = `harvest ${range}`; meta2.append(r); }
+        li.append(meta2); if (p.notes) { const n = document.createElement('div'); n.className = 'muted small'; n.textContent = p.notes; li.append(n); } ul.append(li);
       }
       info.append(ul);
     }
     if (area.tasks?.length) {
       const hh = document.createElement('h3'); hh.textContent = 'To do'; info.append(hh);
       const ul = document.createElement('ul'); ul.className = 'tasks';
-      for (const tk of area.tasks) {
-        const li = document.createElement('li'); li.textContent = tk.title + (tk.notes ? ` — ${tk.notes}` : ''); ul.append(li);
-      }
+      for (const tk of area.tasks) { const li = document.createElement('li'); li.textContent = tk.title + (tk.notes ? ` — ${tk.notes}` : ''); ul.append(li); }
       info.append(ul);
     }
-    if (!inArea.length && !area.plantings?.length && !area.tasks?.length && !area.notes) {
-      const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Nothing recorded here yet.'; info.append(p);
-    }
+    if (!inArea.length && !area.plantings?.length && !area.tasks?.length && !area.notes) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Nothing recorded here yet.'; info.append(p); }
   }
   function renderMarkerInfo(m) {
-    info.replaceChildren();
-    const h = document.createElement('h2'); h.textContent = `${m.icon} ${m.label || 'Plant'}`; info.append(h);
-    const host = areas.find((a) =>
-      m.x >= a.shape.x && m.x <= a.shape.x + a.shape.w &&
-      m.y >= a.shape.y && m.y <= a.shape.y + a.shape.h);
-    const p = document.createElement('p'); p.className = 'muted';
-    p.textContent = host ? `In: ${host.name}` : 'Not inside a mapped area.'; info.append(p);
+    info.replaceChildren(); const h = document.createElement('h2'); h.textContent = `${m.icon} ${m.label || 'Plant'}`; info.append(h);
+    const host = areas.find((a) => m.x >= a.shape.x && m.x <= a.shape.x + a.shape.w && m.y >= a.shape.y && m.y <= a.shape.y + a.shape.h);
+    const p = document.createElement('p'); p.className = 'muted'; p.textContent = host ? `In: ${host.name}` : 'Not inside a mapped area.'; info.append(p);
   }
 
   // ---- edit forms --------------------------------------------------------
-
-  function field(labelText, inputEl) {
-    const wrap = document.createElement('label'); wrap.className = 'field';
-    const span = document.createElement('span'); span.textContent = labelText;
-    wrap.append(span, inputEl); return wrap;
-  }
+  function field(labelText, inputEl) { const wrap = document.createElement('label'); wrap.className = 'field'; const span = document.createElement('span'); span.textContent = labelText; wrap.append(span, inputEl); return wrap; }
   function areaForm(area) {
     const frag = document.createDocumentFragment();
     const h = document.createElement('h2'); h.textContent = 'Edit area'; frag.append(h);
-
-    const name = document.createElement('input'); name.type = 'text'; name.value = area.name;
-    name.addEventListener('input', () => { area.name = name.value; save(); }); frag.append(field('Name', name));
-
+    const name = document.createElement('input'); name.type = 'text'; name.value = area.name; name.addEventListener('input', () => { area.name = name.value; save(); }); frag.append(field('Name', name));
     const type = document.createElement('select');
-    for (const [val, m] of Object.entries(TYPE_META)) {
-      const opt = document.createElement('option'); opt.value = val; opt.textContent = m.label;
-      if (val === area.type) opt.selected = true; type.append(opt);
-    }
+    for (const [val, m] of Object.entries(TYPE_META)) { const opt = document.createElement('option'); opt.value = val; opt.textContent = m.label; if (val === area.type) opt.selected = true; type.append(opt); }
     type.addEventListener('change', () => { area.type = type.value; syncArea(area); save(); }); frag.append(field('Type', type));
-
-    const notes = document.createElement('textarea'); notes.rows = 3; notes.value = area.notes || '';
-    notes.addEventListener('input', () => { area.notes = notes.value; save(); }); frag.append(field('Notes', notes));
-
+    const notes = document.createElement('textarea'); notes.rows = 3; notes.value = area.notes || ''; notes.addEventListener('input', () => { area.notes = notes.value; save(); }); frag.append(field('Notes', notes));
     const confirmRow = document.createElement('label'); confirmRow.className = 'field field--check';
-    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !area.provisional;
-    cb.addEventListener('change', () => { area.provisional = !cb.checked; save(); });
-    const cspan = document.createElement('span'); cspan.textContent = 'Name confirmed';
-    confirmRow.append(cb, cspan); frag.append(confirmRow);
-
-    if (zoomAreaId !== area.id) {
-      const z = document.createElement('button'); z.type = 'button'; z.className = 'zoom-link';
-      z.textContent = '🔍 Zoom in to add plants'; z.addEventListener('click', () => zoomToArea(area.id)); frag.append(z);
-    }
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !area.provisional; cb.addEventListener('change', () => { area.provisional = !cb.checked; save(); });
+    const cspan = document.createElement('span'); cspan.textContent = 'Name confirmed'; confirmRow.append(cb, cspan); frag.append(confirmRow);
+    if (focusedAreaId !== area.id) { const z = document.createElement('button'); z.type = 'button'; z.className = 'zoom-link'; z.textContent = '🔍 Zoom in to add plants'; z.addEventListener('click', () => zoomToArea(area.id)); frag.append(z); }
     const del = document.createElement('button'); del.type = 'button'; del.className = 'danger'; del.textContent = 'Delete area';
-    del.addEventListener('click', () => {
-      const i = areas.findIndex((a) => a.id === area.id);
-      if (i >= 0) areas.splice(i, 1);
-      if (zoomAreaId === area.id) zoomOut();
-      clearSelection(); renderAreas(); refreshSelection(); save();
-    });
+    del.addEventListener('click', () => { const i = areas.findIndex((a) => a.id === area.id); if (i >= 0) areas.splice(i, 1); if (focusedAreaId === area.id) zoomOut(); clearSelection(); renderAreas(); refreshSelection(); save(); });
     frag.append(del); return frag;
   }
   function markerForm(m) {
     const frag = document.createDocumentFragment();
     const h = document.createElement('h2'); h.textContent = 'Edit plant'; frag.append(h);
-
     const iconWrap = document.createElement('div'); iconWrap.className = 'icon-grid';
-    for (const it of ICONS) {
-      const b = document.createElement('button'); b.type = 'button';
-      b.className = 'icon-btn' + (it.icon === m.icon ? ' is-active' : '');
-      b.textContent = it.icon; b.title = it.label;
-      b.addEventListener('click', () => {
-        m.icon = it.icon; if (!m.label) m.label = it.label;
-        syncMarker(m); updatePlantCounts(); renderInfo(); save();
-      });
-      iconWrap.append(b);
-    }
+    for (const it of ICONS) { const b = document.createElement('button'); b.type = 'button'; b.className = 'icon-btn' + (it.icon === m.icon ? ' is-active' : ''); b.textContent = it.icon; b.title = it.label; b.addEventListener('click', () => { m.icon = it.icon; if (!m.label) m.label = it.label; syncMarker(m); updatePlantCounts(); renderInfo(); save(); }); iconWrap.append(b); }
     frag.append(field('Icon', iconWrap));
-
-    const label = document.createElement('input'); label.type = 'text'; label.value = m.label || '';
-    label.addEventListener('input', () => { m.label = label.value; save(); }); frag.append(field('Label', label));
-
-    const radius = document.createElement('input'); radius.type = 'range';
-    radius.min = '1'; radius.max = '15'; radius.step = '0.5'; radius.value = String(m.r);
-    radius.addEventListener('input', () => { m.r = Number(radius.value); syncMarker(m); save(); }); frag.append(field('Radius', radius));
-
+    const label = document.createElement('input'); label.type = 'text'; label.value = m.label || ''; label.addEventListener('input', () => { m.label = label.value; save(); }); frag.append(field('Label', label));
+    const radius = document.createElement('input'); radius.type = 'range'; radius.min = '1'; radius.max = '15'; radius.step = '0.5'; radius.value = String(m.r); radius.addEventListener('input', () => { m.r = Number(radius.value); syncMarker(m); save(); }); frag.append(field('Radius', radius));
     const del = document.createElement('button'); del.type = 'button'; del.className = 'danger'; del.textContent = 'Delete plant';
-    del.addEventListener('click', () => {
-      const i = markers.findIndex((x) => x.id === m.id);
-      if (i >= 0) markers.splice(i, 1);
-      clearSelection(); renderMarkers(); updatePlantCounts(); refreshSelection(); save();
-    });
+    del.addEventListener('click', () => { const i = markers.findIndex((x) => x.id === m.id); if (i >= 0) markers.splice(i, 1); clearSelection(); renderMarkers(); updatePlantCounts(); refreshSelection(); save(); });
     frag.append(del); return frag;
   }
 
-  // ---- pointer interaction ----------------------------------------------
-
-  let drag = null;
-  function dropMarker(evt) {
-    const p = toLocal(evt);
-    const m = { id: uid('m-'), icon: placeIcon ? placeIcon.icon : '🌱',
-      label: placeIcon ? placeIcon.label : '', x: round(p.x), y: round(p.y), r: 2.5 };
-    markers.push(m);
-    renderMarker(m); updatePlantCounts();
-    setTool('select'); selectMarker(m.id); save();
+  // ---- unified pointer: tap / element-drag / pan / pinch -----------------
+  const pointers = new Map();
+  let down = null, pinch = null;
+  const hitOf = (target) => {
+    const mEl = target.closest && target.closest('.marker'); if (mEl) return { kind: 'marker', id: mEl.getAttribute('data-id'), handle: target.classList.contains('handle') };
+    const aEl = target.closest && target.closest('.area'); if (aEl) return { kind: 'area', id: aEl.getAttribute('data-id'), handle: target.classList.contains('handle') };
+    return { kind: 'bg' };
+  };
+  function dropMarkerAt(cx, cy) {
+    const p = toLocal(cx, cy);
+    const m = { id: uid('m-'), icon: placeIcon ? placeIcon.icon : '🌱', label: placeIcon ? placeIcon.label : '', x: round(p.x), y: round(p.y), r: 2.5 };
+    markers.push(m); renderMarker(m); updatePlantCounts(); setTool('select'); selectMarker(m.id); save();
   }
-  function onAreaDown(evt, area) {
-    if (mode === 'edit' && tool === 'place') { evt.stopPropagation(); dropMarker(evt); return; }
-    evt.stopPropagation();
-    if (mode === 'view') { selectArea(area.id); if (zoomAreaId && zoomAreaId !== area.id) zoomToArea(area.id); return; }
-    selectArea(area.id);
-    if (zoomAreaId && zoomAreaId !== area.id) { zoomToArea(area.id); return; }
-    const start = toLocal(evt);
-    drag = { kind: 'area', area, mode: evt.target.classList.contains('handle') ? 'resize' : 'move',
-      sx: start.x, sy: start.y, ox: area.shape.x, oy: area.shape.y, ow: area.shape.w, oh: area.shape.h };
-    svg.setPointerCapture(evt.pointerId);
-  }
-  function onMarkerDown(evt, m) {
-    if (mode === 'edit' && tool === 'place') { evt.stopPropagation(); dropMarker(evt); return; }
-    evt.stopPropagation();
-    if (mode === 'view') { selectMarker(m.id); return; }
-    selectMarker(m.id);
-    const start = toLocal(evt);
-    drag = { kind: 'marker', marker: m, mode: evt.target.classList.contains('handle') ? 'resize' : 'move',
-      sx: start.x, sy: start.y, ox: m.x, oy: m.y, or: m.r };
-    svg.setPointerCapture(evt.pointerId);
-  }
-  svg.addEventListener('pointerdown', (evt) => {
-    if (mode === 'edit' && tool === 'place') { dropMarker(evt); return; }
-    clearSelection();
-  });
-  svg.addEventListener('pointermove', (evt) => {
-    if (!drag) return;
-    const p = toLocal(evt), dx = p.x - drag.sx, dy = p.y - drag.sy;
-    if (drag.kind === 'area') {
-      if (drag.mode === 'move') { drag.area.shape.x = round(drag.ox + dx); drag.area.shape.y = round(drag.oy + dy); }
-      else { drag.area.shape.w = round(Math.max(2, drag.ow + dx)); drag.area.shape.h = round(Math.max(2, drag.oh + dy)); }
-      syncArea(drag.area);
-    } else {
-      if (drag.mode === 'move') { drag.marker.x = round(drag.ox + dx); drag.marker.y = round(drag.oy + dy); }
-      else { drag.marker.r = round(Math.max(1, Math.hypot(p.x - drag.marker.x, p.y - drag.marker.y))); }
-      syncMarker(drag.marker);
+  svg.addEventListener('pointerdown', (e) => {
+    svg.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) { startPinch(); down = null; return; }
+    if (pointers.size > 2) return;
+    cancelAnimationFrame(raf); readVB();
+    const hit = hitOf(e.target);
+    if (mode === 'edit' && tool === 'place') { dropMarkerAt(e.clientX, e.clientY); down = null; return; }
+    down = { id: e.pointerId, sx: e.clientX, sy: e.clientY, hit, moved: false, startVB: { ...vb }, elDrag: null };
+    if (mode === 'edit' && tool === 'select' && hit.kind !== 'bg') {
+      const start = toLocal(e.clientX, e.clientY);
+      if (hit.kind === 'area') { const a = areas.find((x) => x.id === hit.id); selectArea(hit.id); down.elDrag = { kind: 'area', ref: a, resize: hit.handle, sx: start.x, sy: start.y, ox: a.shape.x, oy: a.shape.y, ow: a.shape.w, oh: a.shape.h }; }
+      else { const m = markers.find((x) => x.id === hit.id); selectMarker(hit.id); down.elDrag = { kind: 'marker', ref: m, resize: hit.handle, sx: start.x, sy: start.y, ox: m.x, oy: m.y, or: m.r }; }
     }
   });
-  function endDrag(evt) {
-    if (!drag) return;
-    try { svg.releasePointerCapture(evt.pointerId); } catch {}
-    if (drag.kind === 'area' || drag.kind === 'marker') updatePlantCounts();
-    drag = null; save();
+  svg.addEventListener('pointermove', (e) => {
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch) { movePinch(); return; }
+    if (!down || e.pointerId !== down.id) return;
+    const dx = e.clientX - down.sx, dy = e.clientY - down.sy;
+    if (!down.moved && Math.hypot(dx, dy) > 5) down.moved = true;
+    if (!down.moved) return;
+    if (down.elDrag) {
+      const p = toLocal(e.clientX, e.clientY), d = down.elDrag;
+      if (d.kind === 'area') {
+        if (d.resize) { d.ref.shape.w = round(Math.max(2, d.ow + (p.x - d.sx))); d.ref.shape.h = round(Math.max(2, d.oh + (p.y - d.sy))); }
+        else { d.ref.shape.x = round(d.ox + (p.x - d.sx)); d.ref.shape.y = round(d.oy + (p.y - d.sy)); }
+        syncArea(d.ref);
+      } else {
+        if (d.resize) d.ref.r = round(Math.max(1, Math.hypot(p.x - d.ref.x, p.y - d.ref.y)));
+        else { d.ref.x = round(d.ox + (p.x - d.sx)); d.ref.y = round(d.oy + (p.y - d.sy)); }
+        syncMarker(d.ref);
+      }
+    } else {
+      const f = down.startVB.w / svg.getBoundingClientRect().width;
+      vb.x = down.startVB.x - dx * f; vb.y = down.startVB.y - dy * f; clampPan(); writeVB();
+    }
+  });
+  function endPointer(e) {
+    pointers.delete(e.pointerId);
+    try { svg.releasePointerCapture(e.pointerId); } catch {}
+    if (pinch && pointers.size < 2) { pinch = null; down = null; return; }
+    if (!down || e.pointerId !== down.id) return;
+    if (!down.moved) {
+      if (down.hit.kind === 'marker') selectMarker(down.hit.id);
+      else if (down.hit.kind === 'area') selectArea(down.hit.id);
+      else clearSelection();
+    } else if (down.elDrag) { updatePlantCounts(); save(); }
+    down = null;
   }
-  svg.addEventListener('pointerup', endDrag);
-  svg.addEventListener('pointercancel', endDrag);
+  svg.addEventListener('pointerup', endPointer);
+  svg.addEventListener('pointercancel', endPointer);
+  svg.addEventListener('dblclick', (e) => { const hit = hitOf(e.target); if (hit.kind === 'area') { e.preventDefault(); zoomToArea(hit.id); } });
 
-  // ---- modes + tools + chrome -------------------------------------------
+  // pinch
+  function dist() { const [a, b] = [...pointers.values()]; return Math.hypot(a.x - b.x, a.y - b.y); }
+  function mid() { const [a, b] = [...pointers.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+  function startPinch() { cancelAnimationFrame(raf); readVB(); const m = mid(); pinch = { d0: dist() || 1, vb0: { ...vb }, focal: screenToRoot(m.x, m.y) }; }
+  function movePinch() { if (pointers.size < 2) return; const scale = dist() / pinch.d0; applyZoom(pinch.vb0, pinch.vb0.w / scale, pinch.focal.x, pinch.focal.y); }
 
+  // wheel zoom
+  svg.addEventListener('wheel', (e) => {
+    e.preventDefault(); cancelAnimationFrame(raf); readVB();
+    const f = screenToRoot(e.clientX, e.clientY);
+    applyZoom(vb, vb.w * (e.deltaY > 0 ? 1.12 : 0.89), f.x, f.y);
+  }, { passive: false });
+
+  // ---- modes / tools / chrome -------------------------------------------
   function setMode(next) {
-    mode = next;
-    if (next !== 'edit') setTool('select');
+    mode = next; if (next !== 'edit') setTool('select');
     document.getElementById('mode-view').classList.toggle('is-active', next === 'view');
     document.getElementById('mode-edit').classList.toggle('is-active', next === 'edit');
-    editTools.hidden = next !== 'edit';
-    svg.classList.toggle('is-editing', next === 'edit');
+    editTools.hidden = next !== 'edit'; svg.classList.toggle('is-editing', next === 'edit');
     refreshSelection(); refreshChrome(); renderInfo();
   }
   function setTool(next) {
     tool = next;
-    if (next !== 'place') {
-      placeIcon = null; placeHint.hidden = true; svg.classList.remove('is-placing');
-      for (const b of palette.querySelectorAll('.icon-btn')) b.classList.remove('is-active');
-    }
+    if (next !== 'place') { placeIcon = null; placeHint.hidden = true; svg.classList.remove('is-placing'); for (const b of palette.querySelectorAll('.icon-btn')) b.classList.remove('is-active'); }
     refreshSelection();
   }
-  // Toolbar visibility depending on mode + zoom + selection.
   function refreshChrome() {
-    const zoomed = !!zoomAreaId;
-    svg.classList.toggle('zoomed', zoomed);
-    addAreaBtn.hidden = !(mode === 'edit' && !zoomed);
-    paletteWrap.hidden = !(mode === 'edit' && zoomed);
-    if (mode === 'edit' && !zoomed) setTool('select');
-    if (zoomed) { zoomBtn.hidden = false; zoomBtn.textContent = '← Back to plot'; }
+    const focused = !!focusedAreaId;
+    svg.classList.toggle('focused', focused);
+    addAreaBtn.hidden = !(mode === 'edit' && !focused);
+    paletteWrap.hidden = !(mode === 'edit' && focused);
+    if (mode === 'edit' && !focused) setTool('select');
+    if (focused) { zoomBtn.hidden = false; zoomBtn.textContent = '← Back to plot'; }
     else if (selected?.kind === 'area') { zoomBtn.hidden = false; zoomBtn.textContent = '🔍 Zoom in'; }
-    else { zoomBtn.hidden = true; }
+    else zoomBtn.hidden = true;
   }
-  zoomBtn.addEventListener('click', () => {
-    if (zoomAreaId) zoomOut();
-    else if (selected?.kind === 'area') zoomToArea(selected.id);
-  });
+  zoomBtn.addEventListener('click', () => { if (focusedAreaId) zoomOut(); else if (selected?.kind === 'area') zoomToArea(selected.id); });
   document.getElementById('mode-view').addEventListener('click', () => setMode('view'));
   document.getElementById('mode-edit').addEventListener('click', () => setMode('edit'));
-  addAreaBtn.addEventListener('click', () => {
-    const area = { id: uid('area-'), name: 'New area', type: 'bed', provisional: true,
-      shape: { x: 118, y: 110, w: 14, h: 10 } };
-    areas.push(area); renderArea(area, areas.length); selectArea(area.id); save();
-  });
+  addAreaBtn.addEventListener('click', () => { const area = { id: uid('area-'), name: 'New area', type: 'bed', provisional: true, shape: { x: 118, y: 110, w: 14, h: 10 } }; areas.push(area); renderArea(area, areas.length); selectArea(area.id); save(); });
 
   for (const it of ICONS) {
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'icon-btn';
-    b.textContent = it.icon; b.title = `Drop a ${it.label}`;
-    b.addEventListener('click', () => {
-      if (tool === 'place' && placeIcon?.icon === it.icon) { setTool('select'); return; }
-      tool = 'place'; placeIcon = it; placeHint.hidden = false; svg.classList.add('is-placing');
-      for (const x of palette.querySelectorAll('.icon-btn')) x.classList.toggle('is-active', x === b);
-      refreshSelection();
-    });
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'icon-btn'; b.textContent = it.icon; b.title = `Drop a ${it.label}`;
+    b.addEventListener('click', () => { if (tool === 'place' && placeIcon?.icon === it.icon) { setTool('select'); return; } tool = 'place'; placeIcon = it; placeHint.hidden = false; svg.classList.add('is-placing'); for (const x of palette.querySelectorAll('.icon-btn')) x.classList.toggle('is-active', x === b); refreshSelection(); });
     palette.append(b);
   }
 
+  // map controls
+  const centerFocal = () => ({ x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 });
+  document.getElementById('zin').addEventListener('click', () => { cancelAnimationFrame(raf); readVB(); const f = centerFocal(); applyZoom(vb, vb.w * 0.7, f.x, f.y); });
+  document.getElementById('zout').addEventListener('click', () => { cancelAnimationFrame(raf); readVB(); const f = centerFocal(); applyZoom(vb, vb.w * 1.43, f.x, f.y); });
+  document.getElementById('zreset').addEventListener('click', () => zoomOut());
+  document.getElementById('fs').addEventListener('click', () => {
+    const on = mapCard.classList.toggle('map-card--full');
+    document.body.classList.toggle('plot-fs', on);
+    requestAnimationFrame(() => requestAnimationFrame(relayout));
+  });
+
   // ---- save actions ------------------------------------------------------
-
   const buildJSON = () => JSON.stringify({ ...plotData, areas, markers }, null, 2);
-  function updateSaveState() {
-    const dirty = isDirty();
-    saveStateEl.hidden = !dirty;
-    if (dirty) saveLabel.textContent = 'Unsaved to site — saved on this device';
-  }
-  document.getElementById('copy-json').addEventListener('click', async () => {
-    document.getElementById('export-text').value = buildJSON();
-    try { await navigator.clipboard.writeText(buildJSON()); } catch {}
-    exportDialog.showModal();
-  });
-  document.getElementById('download-json').addEventListener('click', () => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([buildJSON()], { type: 'application/json' }));
-    a.download = 'areas.json'; a.click(); URL.revokeObjectURL(a.href);
-  });
-  document.getElementById('discard').addEventListener('click', () => {
-    if (!confirm('Discard local changes on this device and revert to the saved site version?')) return;
-    localStorage.removeItem(STORE_KEY);
-    const fresh = JSON.parse(baselineJSON);
-    areas = fresh.areas; markers = fresh.markers;
-    clearSelection(); renderAreas(); renderMarkers(); refreshSelection(); updateSaveState();
-  });
-
+  function updateSaveState() { const d = isDirty(); saveStateEl.hidden = !d; if (d) saveLabel.textContent = 'Unsaved to site'; }
+  document.getElementById('copy-json').addEventListener('click', async () => { document.getElementById('export-text').value = buildJSON(); try { await navigator.clipboard.writeText(buildJSON()); } catch {} exportDialog.showModal(); });
+  document.getElementById('download-json').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buildJSON()], { type: 'application/json' })); a.download = 'areas.json'; a.click(); URL.revokeObjectURL(a.href); });
+  document.getElementById('discard').addEventListener('click', () => { if (!confirm('Discard local changes on this device and revert to the saved site version?')) return; localStorage.removeItem(STORE_KEY); const fresh = JSON.parse(baselineJSON); areas = fresh.areas; markers = fresh.markers; clearSelection(); renderAreas(); renderMarkers(); refreshSelection(); updateSaveState(); });
   const b64 = (s) => btoa(unescape(encodeURIComponent(s)));
-  function setWeb(msg) { webStatus.textContent = msg || ''; }
+  const setWeb = (m) => { webStatus.textContent = m || ''; };
   document.getElementById('save-web').addEventListener('click', async () => {
     let token = localStorage.getItem(TOKEN_KEY);
-    if (!token) {
-      token = prompt(
-        'Paste a GitHub token to publish.\n\n' +
-        'Create a fine-grained token (github.com → Settings → Developer settings → ' +
-        'Fine-grained tokens) limited to the "allotment" repo, with Contents: Read and write. ' +
-        'It is stored only on this device.');
-      if (!token) return;
-      localStorage.setItem(TOKEN_KEY, token.trim());
-    }
+    if (!token) { token = prompt('Paste a GitHub token to publish.\n\nCreate a fine-grained token (github.com → Settings → Developer settings → Fine-grained tokens) limited to the "allotment" repo, with Contents: Read and write. Stored only on this device.'); if (!token) return; localStorage.setItem(TOKEN_KEY, token.trim()); }
     token = token.trim();
     const url = `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${repo.path}`;
     const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
@@ -690,111 +521,106 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     try {
       const getRes = await fetch(`${url}?ref=${repo.branch}`, { headers });
       if (getRes.status === 401) { localStorage.removeItem(TOKEN_KEY); setWeb('Token rejected — tap again to re-enter.'); return; }
-      let sha = null;
-      if (getRes.ok) sha = (await getRes.json()).sha;
-      const body = { message: 'Update plot from web editor', content: b64(buildJSON()), branch: repo.branch };
-      if (sha) body.sha = sha;
+      let sha = null; if (getRes.ok) sha = (await getRes.json()).sha;
+      const body = { message: 'Update plot from web editor', content: b64(buildJSON()), branch: repo.branch }; if (sha) body.sha = sha;
       const putRes = await fetch(url, { method: 'PUT', headers, body: JSON.stringify(body) });
-      if (putRes.ok) {
-        baselineJSON = JSON.stringify({ areas, markers });
-        updateSaveState();
-        setWeb('✓ Saved — live site updates in ~1 min.');
-      } else if (putRes.status === 401 || putRes.status === 403) {
-        localStorage.removeItem(TOKEN_KEY); setWeb('Auth failed — check token has Contents: write, then tap again.');
-      } else {
-        const e = await putRes.json().catch(() => ({}));
-        setWeb('Error: ' + (e.message || putRes.status));
-      }
-    } catch { setWeb('Network error — check connection.'); }
+      if (putRes.ok) { baselineJSON = JSON.stringify({ areas, markers }); updateSaveState(); setWeb('✓ Saved — live in ~1 min.'); }
+      else if (putRes.status === 401 || putRes.status === 403) { localStorage.removeItem(TOKEN_KEY); setWeb('Auth failed — check token scope, then tap again.'); }
+      else { const e = await putRes.json().catch(() => ({})); setWeb('Error: ' + (e.message || putRes.status)); }
+    } catch { setWeb('Network error.'); }
   });
 
   // ---- legend + init -----------------------------------------------------
-
   const legendList = document.getElementById('legend-list');
-  for (const [, m] of Object.entries(TYPE_META)) {
-    const li = document.createElement('li');
-    const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = m.color;
-    li.append(sw, document.createTextNode(m.label)); legendList.append(li);
-  }
+  for (const [, m] of Object.entries(TYPE_META)) { const li = document.createElement('li'); const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = m.color; li.append(sw, document.createTextNode(m.label)); legendList.append(li); }
 
   renderAreas(); renderMarkers(); refreshSelection(); refreshChrome(); renderInfo(); updateSaveState();
+  relayout();
+  let ro;
+  if (window.ResizeObserver) { ro = new ResizeObserver(() => relayout()); ro.observe(svg); }
+  window.addEventListener('resize', () => relayout());
 </script>
 
 <style>
   .plot { display: flex; flex-direction: column; gap: 0.9rem; }
-  .plot__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem; }
+  .plot__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
 
-  .modes { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--panel); }
-  .mode { border: 0; background: transparent; padding: 0.45rem 1.05rem; font: inherit; cursor: pointer; color: var(--muted); }
-  .mode.is-active { background: var(--accent); color: #fff; }
+  .modes { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--panel); box-shadow: var(--shadow-sm); }
+  .mode { border: 0; background: transparent; padding: 0.42rem 1rem; font: inherit; font-weight: 600; cursor: pointer; color: var(--muted); }
+  .mode.is-active { background: var(--green); color: #fff; }
 
   .edit-tools { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
   .palette-wrap { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-  .palette-label { color: var(--muted); font-size: 0.85rem; }
+  .palette-label { color: var(--muted); font-size: 0.82rem; }
 
-  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 0.4rem 0.8rem; border-radius: 9px; }
-  button:hover { border-color: var(--accent); }
-  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-  button.danger { color: #a23b2b; border-color: #e3b8b0; margin-top: 0.6rem; }
-  button.ghost { color: var(--muted); }
-  #zoom-btn { background: color-mix(in srgb, var(--accent) 12%, white); border-color: color-mix(in srgb, var(--accent) 40%, white); }
+  .ctl { font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
+  .ctl:hover { border-color: var(--green); }
+  .ctl--primary { background: var(--green); color: #fff; border-color: var(--green); }
+  .ctl--primary:hover { background: var(--green-700); }
+  .ctl--ghost { color: var(--muted); box-shadow: none; }
+  .danger { font: inherit; font-weight: 600; cursor: pointer; border: 1px solid #e3b8b0; color: #a23b2b; background: var(--panel); padding: 0.45rem 0.8rem; border-radius: var(--radius-sm); margin-top: 0.7rem; }
+  #zoom-btn { background: var(--green-100); border-color: color-mix(in srgb, var(--green) 35%, white); color: var(--green-700); }
 
   .palette { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-  .icon-btn { padding: 0.25rem 0.4rem; font-size: 1.15rem; line-height: 1; border-radius: 8px; }
-  .icon-btn.is-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, white); }
+  .icon-btn { padding: 0.25rem 0.42rem; font-size: 1.15rem; line-height: 1; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel); cursor: pointer; }
+  .icon-btn.is-active { border-color: var(--green); background: var(--green-100); }
 
-  .save-state { display: flex; align-items: center; gap: 0.45rem; margin-left: auto; flex-wrap: wrap; font-size: 0.82rem; color: var(--accent-2); }
-  .save-state .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--accent-2); }
-  .save-state button { padding: 0.3rem 0.6rem; font-size: 0.82rem; }
-  .web-status { color: var(--accent); }
+  .save-state { display: flex; align-items: center; gap: 0.45rem; margin-left: auto; flex-wrap: wrap; font-size: 0.82rem; color: var(--accent); }
+  .save-state__label { font-weight: 700; }
+  .web-status { color: var(--green-700); }
 
-  .plot__grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 1.2rem; align-items: start; }
+  .plot__grid { display: grid; grid-template-columns: auto 340px; gap: 1.4rem; justify-content: center; align-items: start; }
 
-  .map-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.6rem; box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; }
-
-  /* aspect-ratio keeps the displayed box stable while we change the viewBox to zoom. */
-  #plot-svg { aspect-ratio: 54.955101 / 153.95511; height: min(78vh, 760px); width: auto; max-width: 100%; display: block; touch-action: none; }
+  .map-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.5rem; box-shadow: var(--shadow); }
+  /* The plot is a tall 3:1 portrait — shape the stage to it so the overview fills nicely. */
+  .map-stage { position: relative; aspect-ratio: 54.955101 / 153.95511; height: min(82vh, 900px); width: auto; margin-inline: auto; border-radius: var(--radius-sm); overflow: hidden; background: #eef0ea; }
+  #plot-svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  #plot-svg.is-editing { cursor: default; }
   #plot-svg.is-placing { cursor: crosshair; }
-  #plot-svg.is-editing .area, #plot-svg.is-editing .marker { cursor: grab; }
 
-  /* Plant icons only show when zoomed into a bed. */
+  .map-card--full { position: fixed; inset: 0; z-index: 60; border-radius: 0; padding: 0; }
+  .map-card--full .map-stage { aspect-ratio: auto; width: 100%; height: 100dvh; border-radius: 0; }
+  :global(body.plot-fs) { overflow: hidden; }
+
+  .map-controls { position: absolute; right: 0.7rem; bottom: 0.7rem; display: flex; flex-direction: column; gap: 0.35rem; z-index: 5; }
+  .map-controls button { width: 2.1rem; height: 2.1rem; border-radius: 10px; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(4px); font-size: 1.05rem; line-height: 1; cursor: pointer; color: var(--ink); box-shadow: var(--shadow-sm); display: grid; place-items: center; }
+  .map-controls button:hover { border-color: var(--green); color: var(--green-700); }
+
   #marker-layer { display: none; }
-  #plot-svg.zoomed #marker-layer { display: inline; }
-  #plot-svg.zoomed .plant-count { display: none; }
+  #plot-svg.focused #marker-layer { display: inline; }
+  #plot-svg.focused .plant-count { display: none; }
 
   .area { cursor: pointer; }
   .area .handle, .marker .handle { cursor: nwse-resize; }
-  .area.is-hover rect, .area.is-selected rect { fill-opacity: 0.48; stroke-width: 0.9; }
+  .area.is-hover rect, .area.is-selected rect { fill-opacity: 0.46; stroke-width: 0.9; }
   .area.is-selected rect { stroke-dasharray: 1.6 1.1; }
   .marker { cursor: pointer; }
   .marker.is-selected circle { stroke-width: 0.9; fill-opacity: 0.3; }
 
-  .place-hint { margin: 0.5rem 0 0; color: var(--accent); font-size: 0.85rem; }
+  .place-hint { position: absolute; left: 50%; top: 0.7rem; transform: translateX(-50%); margin: 0; padding: 0.3rem 0.8rem; border-radius: 999px; background: var(--green); color: #fff; font-size: 0.82rem; font-weight: 600; box-shadow: var(--shadow); }
 
-  .info { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.1rem; box-shadow: var(--shadow); position: sticky; top: 5rem; min-height: 200px; }
-  .info h2 { margin: 0 0 0.5rem; font-size: 1.2rem; }
-  .info h3 { margin: 1rem 0 0.4rem; font-size: 0.95rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; }
+  .info { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem 1.2rem; box-shadow: var(--shadow-sm); position: sticky; top: calc(var(--header-h) + 14px); min-height: 220px; }
+  .info h2 { margin: 0 0 0.5rem; font-size: 1.25rem; }
+  .info h3 { margin: 1rem 0 0.4rem; font-size: 0.78rem; color: var(--green-700); text-transform: uppercase; letter-spacing: 0.08em; }
   .info__empty { color: var(--muted); }
-  .notes { margin: 0.3rem 0; }
-  .muted { color: var(--muted); }
-  .small { font-size: 0.85rem; }
-  .zoom-link { margin: 0.2rem 0 0.5rem; background: color-mix(in srgb, var(--accent) 10%, white); border-color: color-mix(in srgb, var(--accent) 35%, white); color: var(--accent); }
+  .notes { margin: 0.3rem 0; color: var(--ink-soft); }
+  .muted { color: var(--muted); } .small { font-size: 0.85rem; }
+  .zoom-link { margin: 0.2rem 0 0.6rem; background: var(--green-100); border: 1px solid color-mix(in srgb, var(--green) 32%, white); color: var(--green-700); border-radius: var(--radius-sm); padding: 0.45rem 0.7rem; font: inherit; font-weight: 600; cursor: pointer; }
 
   .tags { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
-  .tag { --tag: var(--muted); font-size: 0.74rem; padding: 0.12rem 0.55rem; border-radius: 999px; background: color-mix(in srgb, var(--tag) 18%, white); color: color-mix(in srgb, var(--tag) 70%, black); border: 1px solid color-mix(in srgb, var(--tag) 40%, white); }
-  .tag--warn { --tag: #b9842b; }
-  .tag--soft { --tag: #4f7d3f; }
+  .tag { --tag: var(--muted); font-size: 0.72rem; font-weight: 600; padding: 0.12rem 0.55rem; border-radius: 999px; background: color-mix(in srgb, var(--tag) 16%, white); color: color-mix(in srgb, var(--tag) 72%, black); border: 1px solid color-mix(in srgb, var(--tag) 38%, white); }
+  .tag--warn { --tag: var(--accent); } .tag--soft { --tag: var(--green); }
 
   .plant-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  .plant-chip { padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.85rem; }
+  .plant-chip { padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.85rem; border: 1px solid var(--line-strong); background: var(--panel); cursor: pointer; }
 
   .plantings, .tasks { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
-  .plantings li { border-left: 3px solid var(--line); padding-left: 0.6rem; }
+  .plantings li { border-left: 3px solid var(--line-strong); padding-left: 0.6rem; }
   .planting-meta { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; font-size: 0.85rem; margin: 0.15rem 0; }
-  .tasks li { border-left: 3px solid var(--accent-2); padding-left: 0.6rem; }
+  .tasks li { border-left: 3px solid var(--accent); padding-left: 0.6rem; }
 
-  .field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.5rem 0; font-size: 0.85rem; color: var(--muted); }
-  .field input, .field select, .field textarea { font: inherit; font-size: 0.95rem; color: var(--ink); padding: 0.4rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.5rem 0; font-size: 0.82rem; color: var(--muted); }
+  .field input, .field select, .field textarea { font: inherit; font-size: 0.95rem; color: var(--ink); padding: 0.4rem 0.55rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; }
   .field input[type='range'] { padding: 0; }
   .field--check { flex-direction: row; align-items: center; gap: 0.5rem; }
   .icon-grid { display: flex; flex-wrap: wrap; gap: 0.25rem; }
@@ -809,11 +635,10 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   #export-dialog textarea { width: 100%; font-family: ui-monospace, monospace; font-size: 0.78rem; }
   #export-dialog menu { padding: 0; margin: 0.6rem 0 0; display: flex; justify-content: flex-end; }
 
-  @media (max-width: 760px) {
+  @media (max-width: 820px) {
     .plot__grid { grid-template-columns: 1fr; }
     .info { position: static; }
-    .map-wrap { padding: 0.4rem; }
-    #plot-svg { width: 100%; height: auto; max-height: none; }
+    .map-stage { height: auto; width: 100%; }
     .save-state { margin-left: 0; width: 100%; }
   }
 </style>

@@ -1,0 +1,209 @@
+---
+import Base from '../layouts/Base.astro';
+import projectsData from '../data/projects.json';
+import areasData from '../data/areas.json';
+
+const areaName = (id) => areasData.areas.find((a) => a.id === id)?.name;
+
+const STATUS = {
+  'in-progress': { label: 'In progress', order: 0 },
+  planned: { label: 'Planned', order: 1 },
+  idea: { label: 'Idea', order: 2 },
+  done: { label: 'Done', order: 3 },
+};
+const PRIORITY = { high: 'High', medium: 'Medium', low: 'Low' };
+
+const projects = [...projectsData.projects].sort(
+  (a, b) => (STATUS[a.status]?.order ?? 9) - (STATUS[b.status]?.order ?? 9)
+);
+const counts = projects.reduce((acc, p) => {
+  acc[p.status] = (acc[p.status] || 0) + 1;
+  return acc;
+}, {});
+---
+
+<Base title="Allotment — Projects" active="projects">
+  <header class="page-head">
+    <p class="eyebrow">Bigger jobs</p>
+    <h1>Projects</h1>
+    <p>Everything beyond day-to-day planting — infrastructure, clearing and improvements.</p>
+  </header>
+
+  <div class="summary">
+    {
+      Object.entries(STATUS).map(([key, s]) =>
+        counts[key] ? (
+          <span class={`chip chip--${key}`}>
+            <b>{counts[key]}</b> {s.label.toLowerCase()}
+          </span>
+        ) : null
+      )
+    }
+  </div>
+
+  <ul class="grid">
+    {
+      projects.map((p) => (
+        <li class={`card proj proj--${p.status}`}>
+          <div class="proj__top">
+            <span class={`status status--${p.status}`}>{STATUS[p.status]?.label ?? p.status}</span>
+            {p.priority && <span class="prio">{PRIORITY[p.priority]} priority</span>}
+          </div>
+          <h2>{p.title}</h2>
+          {p.summary && <p class="proj__summary">{p.summary}</p>}
+          {p.next && (
+            <p class="proj__next">
+              <span class="proj__next-label">Next</span>
+              {p.next}
+            </p>
+          )}
+          {areaName(p.areaId) && <p class="proj__area">📍 {areaName(p.areaId)}</p>}
+        </li>
+      ))
+    }
+  </ul>
+</Base>
+
+<style>
+  .summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.4rem;
+  }
+  .chip {
+    font-size: 0.82rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    color: var(--ink-soft);
+    background: var(--panel);
+  }
+  .chip b {
+    color: var(--ink);
+  }
+  .chip--in-progress {
+    border-color: color-mix(in srgb, var(--accent) 45%, white);
+    background: var(--accent-soft);
+  }
+
+  .grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 1rem;
+  }
+
+  .proj {
+    padding: 1.1rem 1.2rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    position: relative;
+    overflow: hidden;
+    transition:
+      transform 0.18s ease,
+      box-shadow 0.18s ease;
+    animation: rise 0.5s both;
+  }
+  .proj::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: var(--line-strong);
+  }
+  .proj--in-progress::before {
+    background: var(--accent);
+  }
+  .proj--planned::before {
+    background: var(--green);
+  }
+  .proj:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow);
+  }
+  .grid li:nth-child(2) {
+    animation-delay: 0.05s;
+  }
+  .grid li:nth-child(3) {
+    animation-delay: 0.1s;
+  }
+  .grid li:nth-child(4) {
+    animation-delay: 0.15s;
+  }
+  .grid li:nth-child(5) {
+    animation-delay: 0.2s;
+  }
+  .grid li:nth-child(6) {
+    animation-delay: 0.25s;
+  }
+
+  .proj__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .status {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .status--in-progress {
+    color: var(--accent);
+  }
+  .status--planned {
+    color: var(--green-700);
+  }
+  .prio {
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .proj h2 {
+    font-size: 1.2rem;
+  }
+  .proj__summary {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+  }
+  .proj__next {
+    margin: 0.2rem 0 0;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    background: var(--paper-2);
+    border-radius: var(--radius-sm);
+    padding: 0.55rem 0.7rem;
+  }
+  .proj__next-label {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.15rem;
+  }
+  .proj__area {
+    margin: 0.1rem 0 0;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>

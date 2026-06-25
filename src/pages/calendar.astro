@@ -1,0 +1,270 @@
+---
+import Base from '../layouts/Base.astro';
+import areasData from '../data/areas.json';
+
+// Build a chronological agenda from the plot data: sowings, plant-outs,
+// harvest windows and dated tasks. (Photo-timeline events will join these later.)
+type Ev = {
+  date: string;
+  kind: 'sow' | 'plant' | 'harvest' | 'task';
+  title: string;
+  area: string;
+  detail?: string;
+};
+
+const events: Ev[] = [];
+const undated: { title: string; area: string; detail?: string }[] = [];
+
+const fmtMon = (d: string) =>
+  new Date(d).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+
+for (const area of areasData.areas) {
+  for (const p of area.plantings ?? []) {
+    if (p.sown) events.push({ date: p.sown, kind: 'sow', title: `Sow ${p.crop}`, area: area.name });
+    if (p.planted)
+      events.push({ date: p.planted, kind: 'plant', title: `Plant out ${p.crop}`, area: area.name });
+    if (p.harvestFrom)
+      events.push({
+        date: p.harvestFrom,
+        kind: 'harvest',
+        title: `${p.crop} — harvest`,
+        area: area.name,
+        detail: p.harvestTo ? `through ${fmtMon(p.harvestTo)}` : undefined,
+      });
+  }
+  for (const t of area.tasks ?? []) {
+    const date = t.due ?? t.windowFrom;
+    if (date) events.push({ date, kind: 'task', title: t.title, area: area.name, detail: t.notes });
+    else undated.push({ title: t.title, area: area.name, detail: t.notes });
+  }
+}
+
+events.sort((a, b) => a.date.localeCompare(b.date));
+
+// Group by calendar month.
+const months: { key: string; label: string; items: Ev[] }[] = [];
+for (const e of events) {
+  const key = e.date.slice(0, 7);
+  let m = months.find((x) => x.key === key);
+  if (!m) {
+    m = {
+      key,
+      label: new Date(e.date + 'T00:00:00').toLocaleDateString('en-GB', {
+        month: 'long',
+        year: 'numeric',
+      }),
+      items: [],
+    };
+    months.push(m);
+  }
+  m.items.push(e);
+}
+
+const todayKey = new Date().toISOString().slice(0, 7);
+const dayNum = (d: string) => new Date(d + 'T00:00:00').getDate();
+const KIND = {
+  sow: { label: 'Sow', mark: '🌱' },
+  plant: { label: 'Plant', mark: '🪴' },
+  harvest: { label: 'Harvest', mark: '🧺' },
+  task: { label: 'Job', mark: '🔧' },
+};
+---
+
+<Base title="Allotment — Calendar" active="calendar">
+  <header class="page-head">
+    <p class="eyebrow">What's happening when</p>
+    <h1>Calendar</h1>
+    <p>
+      A timeline pulled from what's planted and what's due. It fills out as you add
+      sowing dates, harvest windows and jobs to each area.
+    </p>
+  </header>
+
+  {
+    months.length === 0 && undated.length === 0 ? (
+      <p class="empty">Nothing dated yet — add harvest windows or tasks to your areas.</p>
+    ) : null
+  }
+
+  <div class="agenda">
+    {
+      months.map((m) => (
+        <section class:list={['month', { 'month--current': m.key === todayKey }]}>
+          <div class="month__label">
+            <h2>{m.label}</h2>
+            {m.key === todayKey && <span class="now">this month</span>}
+          </div>
+          <ul class="events">
+            {m.items.map((e) => (
+              <li class={`event event--${e.kind}`}>
+                <span class="event__day">{dayNum(e.date)}</span>
+                <span class="event__mark" aria-hidden="true">
+                  {KIND[e.kind].mark}
+                </span>
+                <span class="event__body">
+                  <span class="event__title">{e.title}</span>
+                  <span class="event__meta">
+                    {e.area}
+                    {e.detail ? ` · ${e.detail}` : ''}
+                  </span>
+                </span>
+                <span class={`event__kind kind--${e.kind}`}>{KIND[e.kind].label}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))
+    }
+
+    {
+      undated.length > 0 && (
+        <section class="month">
+          <div class="month__label">
+            <h2>Anytime</h2>
+            <span class="now now--muted">no date set</span>
+          </div>
+          <ul class="events">
+            {undated.map((e) => (
+              <li class="event event--task">
+                <span class="event__day">—</span>
+                <span class="event__mark" aria-hidden="true">
+                  🔧
+                </span>
+                <span class="event__body">
+                  <span class="event__title">{e.title}</span>
+                  <span class="event__meta">
+                    {e.area}
+                    {e.detail ? ` · ${e.detail}` : ''}
+                  </span>
+                </span>
+                <span class="event__kind kind--task">Job</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .empty {
+    color: var(--muted);
+  }
+  .agenda {
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+  }
+  .month {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 1rem;
+    align-items: start;
+  }
+  .month__label {
+    position: sticky;
+    top: calc(var(--header-h) + 12px);
+  }
+  .month__label h2 {
+    font-size: 1.15rem;
+  }
+  .now {
+    display: inline-block;
+    margin-top: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .now--muted {
+    color: var(--muted);
+  }
+  .month--current .month__label h2 {
+    color: var(--green-700);
+  }
+
+  .events {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .event {
+    display: grid;
+    grid-template-columns: 2ch 1.4rem 1fr auto;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 0.7rem 0.9rem;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.16s ease;
+  }
+  .event:hover {
+    border-color: var(--line-strong);
+  }
+  .event__day {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--muted);
+    text-align: right;
+  }
+  .event__mark {
+    font-size: 1rem;
+  }
+  .event__body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .event__title {
+    font-weight: 600;
+  }
+  .event__meta {
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .event__kind {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.16rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .kind--harvest {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .kind--sow,
+  .kind--plant {
+    color: var(--green-700);
+    background: var(--green-100);
+  }
+  .kind--task {
+    color: var(--ink-soft);
+    background: var(--paper-2);
+  }
+
+  @media (max-width: 680px) {
+    .month {
+      grid-template-columns: 1fr;
+      gap: 0.5rem;
+    }
+    .month__label {
+      position: static;
+    }
+    .event {
+      grid-template-columns: 2ch 1.4rem 1fr;
+    }
+    .event__kind {
+      display: none;
+    }
+  }
+</style>

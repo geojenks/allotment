@@ -1,0 +1,59 @@
+{
+  "_comment": "Plot projects / jobs bigger than a single planting. status: idea | planned | in-progress | done. areaId links to an area in areas.json (optional).",
+  "projects": [
+    {
+      "id": "polytunnel-skin",
+      "title": "Finish the polytunnel",
+      "status": "in-progress",
+      "areaId": "polytunnel",
+      "summary": "Frame is up; needs its cover (skin) fitting.",
+      "next": "Order/measure the cover and fit it on a still, warm day.",
+      "priority": "high"
+    },
+    {
+      "id": "compost",
+      "title": "Improve the compost setup",
+      "status": "planned",
+      "areaId": "back-boundary",
+      "summary": "Make the compost heap tidier and more productive.",
+      "next": "Build/define bays and start layering greens and browns.",
+      "priority": "medium"
+    },
+    {
+      "id": "tool-storage",
+      "title": "Better tool storage",
+      "status": "idea",
+      "areaId": "rough-ground",
+      "summary": "The tool box at the bottom of the rough ground needs upgrading.",
+      "next": "Decide on a small store/shed or a weatherproof box.",
+      "priority": "medium"
+    },
+    {
+      "id": "bench",
+      "title": "Install a bench",
+      "status": "planned",
+      "areaId": "peach-bench",
+      "summary": "A spot to sit, lower-left near the (dying) peach tree.",
+      "next": "Clear the area and level a base.",
+      "priority": "low"
+    },
+    {
+      "id": "clear-bramble",
+      "title": "Clear the bramble & weeds",
+      "status": "idea",
+      "areaId": "rough-ground",
+      "summary": "~2m is overrun; reclaim it for growing space.",
+      "next": "Sheet-mulch through the season, then dig out roots.",
+      "priority": "medium"
+    },
+    {
+      "id": "flower-bed",
+      "title": "Plant the flower area",
+      "status": "idea",
+      "areaId": "flower-area",
+      "summary": "Lower-right earmarked for nice flowers.",
+      "next": "Pick a pollinator-friendly mix and sow in spring.",
+      "priority": "low"
+    }
+  ]
+}

@@ -1,9 +1,18 @@
 ---
 interface Props {
   title?: string;
+  active?: 'layout' | 'calendar' | 'projects' | 'plans';
+  wide?: boolean;
 }
-const { title = 'Allotment' } = Astro.props;
+const { title = 'Allotment', active = 'layout', wide = false } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '') + '/';
+
+const tabs = [
+  { key: 'layout', href: base, label: 'Layout' },
+  { key: 'calendar', href: `${base}calendar`, label: 'Calendar' },
+  { key: 'projects', href: `${base}projects`, label: 'Projects' },
+  { key: 'plans', href: `${base}plans`, label: 'Plans' },
+];
 ---
 
 <!doctype html>
@@ -13,33 +22,66 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '') + '/';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="A living plan and journal for the allotment." />
     <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <title>{title}</title>
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href={base}>🌱 The Allotment</a>
-      <nav>
-        <a href={base}>Plot</a>
+      <a class="brand" href={base}>
+        <span class="brand__mark" aria-hidden="true"></span>
+        <span class="brand__name">Allotment</span>
+      </a>
+      <nav class="tabs" aria-label="Sections">
+        {
+          tabs.map((t) => (
+            <a
+              href={t.href}
+              class:list={['tab', { 'is-active': t.key === active }]}
+              aria-current={t.key === active ? 'page' : undefined}
+            >
+              {t.label}
+            </a>
+          ))
+        }
       </nav>
     </header>
-    <main>
+
+    <main class:list={['main', { 'main--wide': wide }]}>
       <slot />
     </main>
+
     <footer class="site-footer">
-      <p>15&nbsp;m plot · planted, planned &amp; in progress</p>
+      <span>15&nbsp;m plot</span>
+      <span class="dot">·</span>
+      <span>planted, planned &amp; in&nbsp;progress</span>
     </footer>
 
     <style is:global>
       :root {
-        --bg: #f4f1ea;
+        --paper: #fbfaf6;
+        --paper-2: #f3f1e9;
         --panel: #ffffff;
-        --ink: #23291f;
-        --muted: #6b7363;
-        --line: #d9d4c7;
-        --accent: #4f7d3f;
-        --accent-2: #b9842b;
-        --shadow: 0 6px 24px rgba(40, 50, 30, 0.12);
+        --ink: #1b2019;
+        --ink-soft: #3c4339;
+        --muted: #767c70;
+        --line: #e7e3d8;
+        --line-strong: #d8d3c5;
+        --green: #356a45;
+        --green-700: #2a5538;
+        --green-100: #e7efe6;
+        --accent: #c2622d;
+        --accent-soft: #f4e3d6;
+        --shadow-sm: 0 1px 2px rgba(30, 40, 25, 0.05);
+        --shadow: 0 10px 30px -12px rgba(30, 45, 25, 0.22);
         --radius: 14px;
+        --radius-sm: 10px;
+        --maxw: 1180px;
+        --header-h: 60px;
         font-synthesis: none;
         -webkit-text-size-adjust: 100%;
       }
@@ -47,7 +89,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '') + '/';
       * {
         box-sizing: border-box;
       }
-
+      /* `hidden` must win over our display:flex/grid rules. */
+      [hidden] {
+        display: none !important;
+      }
       html,
       body {
         margin: 0;
@@ -55,77 +100,183 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '') + '/';
       }
 
       body {
-        font-family:
-          'Iowan Old Style', 'Palatino Linotype', Palatino, 'Hoefler Text',
-          Georgia, serif;
+        font-family: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
         color: var(--ink);
-        background:
-          radial-gradient(1200px 600px at 80% -10%, #eef3e6, transparent),
-          var(--bg);
+        background-color: var(--paper);
+        background-image:
+          radial-gradient(900px 500px at 100% -5%, #eef3e8, transparent 60%),
+          radial-gradient(700px 400px at -10% 0%, #f6efe6, transparent 55%);
         min-height: 100vh;
         display: flex;
         flex-direction: column;
-        line-height: 1.5;
+        line-height: 1.55;
+        font-size: 16px;
+        letter-spacing: -0.005em;
       }
 
+      h1,
+      h2,
+      h3,
+      .display {
+        font-family: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif;
+        font-weight: 700;
+        line-height: 1.08;
+        letter-spacing: -0.02em;
+        color: var(--ink);
+        margin: 0;
+      }
+
+      a {
+        color: var(--green-700);
+      }
+
+      /* ---------- header ---------- */
       .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        height: var(--header-h);
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
-        padding: 0.9rem 1.4rem;
+        padding: 0 clamp(1rem, 4vw, 2rem);
+        background: color-mix(in srgb, var(--paper) 82%, transparent);
+        backdrop-filter: saturate(1.4) blur(10px);
         border-bottom: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.6);
-        backdrop-filter: blur(6px);
-        position: sticky;
-        top: 0;
-        z-index: 20;
       }
-
       .brand {
-        font-weight: 700;
-        font-size: 1.15rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
         text-decoration: none;
         color: var(--ink);
-        letter-spacing: 0.2px;
+      }
+      .brand__mark {
+        width: 16px;
+        height: 16px;
+        border-radius: 50% 50% 50% 0;
+        background: linear-gradient(150deg, var(--green) 0%, var(--green-700) 100%);
+        transform: rotate(-12deg);
+        box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--green) 60%, white 0%);
+      }
+      .brand__name {
+        font-family: 'Bricolage Grotesque', sans-serif;
+        font-weight: 800;
+        font-size: 1.18rem;
+        letter-spacing: -0.03em;
       }
 
-      .site-header nav a {
-        color: var(--muted);
+      .tabs {
+        display: flex;
+        align-items: center;
+        gap: clamp(0.25rem, 2vw, 0.75rem);
+      }
+      .tab {
+        position: relative;
         text-decoration: none;
+        color: var(--muted);
+        font-weight: 600;
         font-size: 0.95rem;
-        margin-left: 1rem;
+        padding: 0.4rem 0.2rem;
+        transition: color 0.18s ease;
       }
-      .site-header nav a:hover {
-        color: var(--accent);
+      .tab::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -2px;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--accent);
+        transform: scaleX(0);
+        transform-origin: center;
+        transition: transform 0.22s cubic-bezier(0.2, 0.7, 0.3, 1);
+      }
+      .tab:hover {
+        color: var(--ink);
+      }
+      .tab.is-active {
+        color: var(--ink);
+      }
+      .tab.is-active::after {
+        transform: scaleX(1);
       }
 
-      main {
+      /* ---------- layout ---------- */
+      .main {
         flex: 1;
         width: 100%;
-        max-width: 1100px;
+        max-width: var(--maxw);
         margin: 0 auto;
-        padding: 1.4rem;
+        padding: clamp(1.1rem, 3vw, 2rem) clamp(1rem, 4vw, 2rem) 2.5rem;
+      }
+      .main--wide {
+        max-width: none;
+        padding-left: clamp(1rem, 3vw, 1.6rem);
+        padding-right: clamp(1rem, 3vw, 1.6rem);
       }
 
       .site-footer {
         border-top: 1px solid var(--line);
         color: var(--muted);
-        font-size: 0.85rem;
-        text-align: center;
-        padding: 1rem;
+        font-size: 0.82rem;
+        display: flex;
+        gap: 0.4rem;
+        justify-content: center;
+        padding: 1.1rem;
+      }
+      .site-footer .dot {
+        opacity: 0.5;
       }
 
-      h1,
-      h2,
-      h3 {
-        font-family:
-          ui-rounded, 'Segoe UI', system-ui, -apple-system, sans-serif;
-        line-height: 1.2;
+      /* ---------- shared building blocks ---------- */
+      .page-head {
+        margin-bottom: clamp(1rem, 3vw, 1.8rem);
       }
-
-      a {
+      .page-head .eyebrow {
+        font-size: 0.74rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
         color: var(--accent);
+        margin-bottom: 0.35rem;
+      }
+      .page-head h1 {
+        font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+      }
+      .page-head p {
+        color: var(--muted);
+        max-width: 60ch;
+        margin: 0.5rem 0 0;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 0.16rem 0.6rem;
+        border-radius: 999px;
+        background: var(--green-100);
+        color: var(--green-700);
+        border: 1px solid color-mix(in srgb, var(--green) 22%, white);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation-duration: 0.001ms !important;
+          transition-duration: 0.001ms !important;
+        }
       }
     </style>
   </body>
