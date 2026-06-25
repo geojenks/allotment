@@ -1,0 +1,815 @@
+---
+import plotData from '../data/areas.json';
+
+// BASE_URL may be "/allotment" (no trailing slash) or "/", so join safely.
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const mapSrc = `${base}/map/plot-base.png`;
+---
+
+<section class="plot">
+  <div class="plot__bar">
+    <div class="modes" role="group" aria-label="Map mode">
+      <button id="mode-view" class="mode is-active" type="button">View</button>
+      <button id="mode-edit" class="mode" type="button">Edit areas</button>
+    </div>
+    <div id="edit-tools" class="edit-tools" hidden>
+      <button id="add-area" type="button">+ Add area</button>
+      <button id="export-json" type="button">Copy JSON</button>
+      <span class="hint">Drag to move · drag the corner to resize</span>
+    </div>
+  </div>
+
+  <div class="plot__grid">
+    <div class="map-wrap">
+      <svg
+        id="plot-svg"
+        viewBox="0 0 54.955101 153.95511"
+        xmlns="http://www.w3.org/2000/svg"
+        role="img"
+        aria-label="Interactive map of the allotment plot"
+      >
+        <defs>
+          <clipPath id="mapclip" clipPathUnits="userSpaceOnUse">
+            <rect
+              width="54.955101"
+              height="153.95511"
+              x="98.595917"
+              y="49.702042"
+              transform="rotate(135.6319)"></rect>
+          </clipPath>
+        </defs>
+        <!-- Same coordinate system as figures/plot_overlay.svg so areas line up. -->
+        <g transform="translate(-98.595917,-49.702042)">
+          <image
+            href={mapSrc}
+            width="152.39999"
+            height="136.78958"
+            preserveAspectRatio="none"
+            x="-259.4986"
+            y="-73.784225"
+            transform="rotate(-135.6319)"
+            clip-path="url(#mapclip)"></image>
+          <g id="area-layer"></g>
+        </g>
+      </svg>
+    </div>
+
+    <aside id="info" class="info">
+      <p class="info__empty">Tap an area on the plan to see what's there.</p>
+    </aside>
+  </div>
+
+  <details class="legend">
+    <summary>Legend &amp; key</summary>
+    <ul id="legend-list"></ul>
+  </details>
+
+  <dialog id="export-dialog">
+    <form method="dialog">
+      <h3>Updated areas JSON</h3>
+      <p>Copied to your clipboard. Paste this into <code>src/data/areas.json</code> to save your layout changes.</p>
+      <textarea id="export-text" rows="12" readonly></textarea>
+      <menu><button value="close">Close</button></menu>
+    </form>
+  </dialog>
+</section>
+
+<script define:vars={{ plotData }}>
+  const TYPE_META = {
+    bed: { color: '#c98a3b', label: 'Bed' },
+    tree: { color: '#5f8a36', label: 'Tree' },
+    bushes: { color: '#86a948', label: 'Bushes' },
+    structure: { color: '#7c8aa0', label: 'Structure' },
+    water: { color: '#3f86ad', label: 'Water' },
+    wild: { color: '#9a7b4f', label: 'Wild / rough' },
+    unused: { color: '#a9a496', label: 'Unused / open' },
+    boundary: { color: '#8a8577', label: 'Boundary' },
+  };
+
+  const STATUS_LABEL = {
+    planned: 'Planned',
+    sown: 'Sown',
+    growing: 'Growing',
+    harvesting: 'Harvesting',
+    done: 'Done',
+    volunteer: 'Self-seeded',
+  };
+
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const areas = plotData.areas;
+
+  const svg = document.getElementById('plot-svg');
+  const layer = document.getElementById('area-layer');
+  const info = document.getElementById('info');
+  const editTools = document.getElementById('edit-tools');
+  const exportDialog = document.getElementById('export-dialog');
+
+  let mode = 'view';
+  let selectedId = null;
+  const nodes = new Map(); // id -> { group, rect, label, badge, handle }
+
+  // ---- rendering ---------------------------------------------------------
+
+  function el(name, attrs) {
+    const node = document.createElementNS(SVGNS, name);
+    for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
+    return node;
+  }
+
+  function colorFor(area) {
+    return (TYPE_META[area.type] || TYPE_META.unused).color;
+  }
+
+  function renderAll() {
+    layer.replaceChildren();
+    nodes.clear();
+    areas.forEach((area, i) => renderArea(area, i + 1));
+    refreshSelection();
+  }
+
+  function renderArea(area, number) {
+    const c = colorFor(area);
+    const g = el('g', { class: 'area', 'data-id': area.id });
+
+    const rect = el('rect', {
+      x: area.shape.x,
+      y: area.shape.y,
+      width: area.shape.w,
+      height: area.shape.h,
+      rx: 0.8,
+      fill: c,
+      'fill-opacity': 0.32,
+      stroke: c,
+      'stroke-width': 0.55,
+    });
+
+    const badge = el('circle', {
+      cx: area.shape.x + 2.6,
+      cy: area.shape.y + 2.6,
+      r: 1.9,
+      fill: c,
+      stroke: '#fff',
+      'stroke-width': 0.35,
+    });
+    const badgeText = el('text', {
+      x: area.shape.x + 2.6,
+      y: area.shape.y + 2.6,
+      'text-anchor': 'middle',
+      'dominant-baseline': 'central',
+      'font-size': 2.2,
+      fill: '#fff',
+      'font-family': 'system-ui, sans-serif',
+    });
+    badgeText.textContent = String(number);
+
+    // resize handle (edit mode only)
+    const handle = el('rect', {
+      x: area.shape.x + area.shape.w - 1.6,
+      y: area.shape.y + area.shape.h - 1.6,
+      width: 1.6,
+      height: 1.6,
+      fill: '#fff',
+      stroke: c,
+      'stroke-width': 0.4,
+      class: 'handle',
+    });
+    handle.style.display = 'none';
+
+    g.append(rect, badge, badgeText, handle);
+    layer.append(g);
+    nodes.set(area.id, { group: g, rect, badge, badgeText, handle, number });
+
+    // events
+    g.addEventListener('mouseenter', () => g.classList.add('is-hover'));
+    g.addEventListener('mouseleave', () => g.classList.remove('is-hover'));
+    g.addEventListener('pointerdown', (e) => onPointerDown(e, area));
+  }
+
+  function syncArea(area) {
+    const n = nodes.get(area.id);
+    if (!n) return;
+    n.rect.setAttribute('x', area.shape.x);
+    n.rect.setAttribute('y', area.shape.y);
+    n.rect.setAttribute('width', area.shape.w);
+    n.rect.setAttribute('height', area.shape.h);
+    n.badge.setAttribute('cx', area.shape.x + 2.6);
+    n.badge.setAttribute('cy', area.shape.y + 2.6);
+    n.badgeText.setAttribute('x', area.shape.x + 2.6);
+    n.badgeText.setAttribute('y', area.shape.y + 2.6);
+    n.handle.setAttribute('x', area.shape.x + area.shape.w - 1.6);
+    n.handle.setAttribute('y', area.shape.y + area.shape.h - 1.6);
+    const c = colorFor(area);
+    for (const node of [n.rect, n.badge, n.handle]) node.setAttribute('stroke', c);
+    n.rect.setAttribute('fill', c);
+    n.badge.setAttribute('fill', c);
+  }
+
+  // ---- selection + info panel -------------------------------------------
+
+  function refreshSelection() {
+    for (const [id, n] of nodes) {
+      const sel = id === selectedId;
+      n.group.classList.toggle('is-selected', sel);
+      n.handle.style.display = mode === 'edit' && sel ? '' : 'none';
+    }
+  }
+
+  function select(id) {
+    selectedId = id;
+    refreshSelection();
+    renderInfo(areas.find((a) => a.id === id));
+  }
+
+  function tag(text, cls) {
+    const s = document.createElement('span');
+    s.className = 'tag ' + (cls || '');
+    s.textContent = text;
+    return s;
+  }
+
+  function dateRange(from, to) {
+    const fmt = (d) =>
+      new Date(d).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+    if (from && to) return `${fmt(from)} – ${fmt(to)}`;
+    if (from) return `from ${fmt(from)}`;
+    if (to) return `until ${fmt(to)}`;
+    return '';
+  }
+
+  function renderInfo(area) {
+    info.replaceChildren();
+    if (!area) {
+      const p = document.createElement('p');
+      p.className = 'info__empty';
+      p.textContent = "Tap an area on the plan to see what's there.";
+      info.append(p);
+      return;
+    }
+
+    if (mode === 'edit') {
+      info.append(editForm(area));
+      return;
+    }
+
+    const meta = TYPE_META[area.type] || TYPE_META.unused;
+    const h = document.createElement('h2');
+    h.textContent = area.name;
+    info.append(h);
+
+    const tags = document.createElement('div');
+    tags.className = 'tags';
+    const t = tag(meta.label);
+    t.style.setProperty('--tag', meta.color);
+    tags.append(t);
+    if (area.provisional) tags.append(tag('name unconfirmed', 'tag--warn'));
+    info.append(tags);
+
+    if (area.notes) {
+      const p = document.createElement('p');
+      p.className = 'notes';
+      p.textContent = area.notes;
+      info.append(p);
+    }
+
+    if (area.plantings?.length) {
+      const hh = document.createElement('h3');
+      hh.textContent = 'Planted';
+      info.append(hh);
+      const ul = document.createElement('ul');
+      ul.className = 'plantings';
+      for (const p of area.plantings) {
+        const li = document.createElement('li');
+        const title = document.createElement('strong');
+        title.textContent = p.variety ? `${p.crop} — ${p.variety}` : p.crop;
+        li.append(title);
+        const meta2 = document.createElement('div');
+        meta2.className = 'planting-meta';
+        meta2.append(tag(STATUS_LABEL[p.status] || p.status, 'tag--soft'));
+        const range = dateRange(p.harvestFrom, p.harvestTo);
+        if (range) {
+          const r = document.createElement('span');
+          r.className = 'muted';
+          r.textContent = `harvest ${range}`;
+          meta2.append(r);
+        }
+        li.append(meta2);
+        if (p.notes) {
+          const n = document.createElement('div');
+          n.className = 'muted small';
+          n.textContent = p.notes;
+          li.append(n);
+        }
+        ul.append(li);
+      }
+      info.append(ul);
+    }
+
+    if (area.tasks?.length) {
+      const hh = document.createElement('h3');
+      hh.textContent = 'To do';
+      info.append(hh);
+      const ul = document.createElement('ul');
+      ul.className = 'tasks';
+      for (const tk of area.tasks) {
+        const li = document.createElement('li');
+        li.textContent = tk.title + (tk.notes ? ` — ${tk.notes}` : '');
+        ul.append(li);
+      }
+      info.append(ul);
+    }
+
+    if (!area.plantings?.length && !area.tasks?.length && !area.notes) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = 'Nothing recorded here yet.';
+      info.append(p);
+    }
+  }
+
+  // ---- edit form ---------------------------------------------------------
+
+  function field(labelText, inputEl) {
+    const wrap = document.createElement('label');
+    wrap.className = 'field';
+    const span = document.createElement('span');
+    span.textContent = labelText;
+    wrap.append(span, inputEl);
+    return wrap;
+  }
+
+  function editForm(area) {
+    const frag = document.createDocumentFragment();
+    const h = document.createElement('h2');
+    h.textContent = 'Edit area';
+    frag.append(h);
+
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.value = area.name;
+    name.addEventListener('input', () => {
+      area.name = name.value;
+    });
+    frag.append(field('Name', name));
+
+    const id = document.createElement('input');
+    id.type = 'text';
+    id.value = area.id;
+    id.addEventListener('change', () => {
+      const old = area.id;
+      area.id = id.value.trim() || old;
+      if (area.id !== old) {
+        const n = nodes.get(old);
+        if (n) {
+          nodes.delete(old);
+          nodes.set(area.id, n);
+          n.group.setAttribute('data-id', area.id);
+        }
+        selectedId = area.id;
+      }
+    });
+    frag.append(field('ID (slug)', id));
+
+    const type = document.createElement('select');
+    for (const [val, m] of Object.entries(TYPE_META)) {
+      const opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = m.label;
+      if (val === area.type) opt.selected = true;
+      type.append(opt);
+    }
+    type.addEventListener('change', () => {
+      area.type = type.value;
+      syncArea(area);
+    });
+    frag.append(field('Type', type));
+
+    const notes = document.createElement('textarea');
+    notes.rows = 3;
+    notes.value = area.notes || '';
+    notes.addEventListener('input', () => {
+      area.notes = notes.value;
+    });
+    frag.append(field('Notes', notes));
+
+    const confirmRow = document.createElement('label');
+    confirmRow.className = 'field field--check';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !area.provisional;
+    cb.addEventListener('change', () => {
+      area.provisional = !cb.checked;
+    });
+    const cspan = document.createElement('span');
+    cspan.textContent = 'Name confirmed (not provisional)';
+    confirmRow.append(cb, cspan);
+    frag.append(confirmRow);
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'danger';
+    del.textContent = 'Delete this area';
+    del.addEventListener('click', () => {
+      const i = areas.findIndex((a) => a.id === area.id);
+      if (i >= 0) areas.splice(i, 1);
+      selectedId = null;
+      renderAll();
+      renderInfo(null);
+    });
+    frag.append(del);
+
+    return frag;
+  }
+
+  // ---- pointer interaction (select / drag / resize) ----------------------
+
+  function toLocal(evt) {
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX;
+    pt.y = evt.clientY;
+    return pt.matrixTransform(layer.getScreenCTM().inverse());
+  }
+
+  let drag = null;
+
+  function onPointerDown(evt, area) {
+    if (mode === 'view') {
+      select(area.id);
+      return;
+    }
+    // edit mode
+    evt.preventDefault();
+    select(area.id);
+    const start = toLocal(evt);
+    const onHandle = evt.target.classList.contains('handle');
+    drag = {
+      area,
+      mode: onHandle ? 'resize' : 'move',
+      startX: start.x,
+      startY: start.y,
+      ox: area.shape.x,
+      oy: area.shape.y,
+      ow: area.shape.w,
+      oh: area.shape.h,
+    };
+    svg.setPointerCapture(evt.pointerId);
+  }
+
+  svg.addEventListener('pointermove', (evt) => {
+    if (!drag) return;
+    const p = toLocal(evt);
+    const dx = p.x - drag.startX;
+    const dy = p.y - drag.startY;
+    if (drag.mode === 'move') {
+      drag.area.shape.x = round(drag.ox + dx);
+      drag.area.shape.y = round(drag.oy + dy);
+    } else {
+      drag.area.shape.w = round(Math.max(2, drag.ow + dx));
+      drag.area.shape.h = round(Math.max(2, drag.oh + dy));
+    }
+    syncArea(drag.area);
+  });
+
+  function endDrag(evt) {
+    if (!drag) return;
+    try {
+      svg.releasePointerCapture(evt.pointerId);
+    } catch {}
+    drag = null;
+  }
+  svg.addEventListener('pointerup', endDrag);
+  svg.addEventListener('pointercancel', endDrag);
+
+  function round(n) {
+    return Math.round(n * 1000) / 1000;
+  }
+
+  // ---- mode switching + tools -------------------------------------------
+
+  const btnView = document.getElementById('mode-view');
+  const btnEdit = document.getElementById('mode-edit');
+
+  function setMode(next) {
+    mode = next;
+    btnView.classList.toggle('is-active', next === 'view');
+    btnEdit.classList.toggle('is-active', next === 'edit');
+    editTools.hidden = next !== 'edit';
+    svg.classList.toggle('is-editing', next === 'edit');
+    refreshSelection();
+    renderInfo(areas.find((a) => a.id === selectedId));
+  }
+  btnView.addEventListener('click', () => setMode('view'));
+  btnEdit.addEventListener('click', () => setMode('edit'));
+
+  document.getElementById('add-area').addEventListener('click', () => {
+    const id = 'area-' + Math.random().toString(36).slice(2, 7);
+    const area = {
+      id,
+      name: 'New area',
+      type: 'bed',
+      provisional: true,
+      shape: { x: 118, y: 110, w: 14, h: 10 },
+    };
+    areas.push(area);
+    renderArea(area, areas.length);
+    select(id);
+  });
+
+  document.getElementById('export-json').addEventListener('click', async () => {
+    const out = { ...plotData, areas };
+    const text = JSON.stringify(out, null, 2);
+    document.getElementById('export-text').value = text;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {}
+    exportDialog.showModal();
+  });
+
+  // ---- legend ------------------------------------------------------------
+
+  const legendList = document.getElementById('legend-list');
+  for (const [, m] of Object.entries(TYPE_META)) {
+    const li = document.createElement('li');
+    const sw = document.createElement('span');
+    sw.className = 'swatch';
+    sw.style.background = m.color;
+    li.append(sw, document.createTextNode(m.label));
+    legendList.append(li);
+  }
+
+  renderAll();
+</script>
+
+<style>
+  .plot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .plot__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.8rem;
+  }
+
+  .modes {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--panel);
+  }
+  .mode {
+    border: 0;
+    background: transparent;
+    padding: 0.4rem 0.95rem;
+    font: inherit;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .mode.is-active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .edit-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .edit-tools .hint {
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  button {
+    font: inherit;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    padding: 0.4rem 0.8rem;
+    border-radius: 9px;
+  }
+  button:hover {
+    border-color: var(--accent);
+  }
+  button.danger {
+    color: #a23b2b;
+    border-color: #e3b8b0;
+  }
+
+  .plot__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 330px;
+    gap: 1.2rem;
+    align-items: start;
+  }
+
+  .map-wrap {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.6rem;
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: center;
+  }
+
+  #plot-svg {
+    height: min(78vh, 760px);
+    width: auto;
+    max-width: 100%;
+    display: block;
+    touch-action: none;
+  }
+
+  .area {
+    cursor: pointer;
+  }
+  .area .handle {
+    cursor: nwse-resize;
+  }
+  .area.is-hover rect,
+  .area.is-selected rect {
+    fill-opacity: 0.5;
+    stroke-width: 0.9;
+  }
+  .area.is-selected rect {
+    stroke-dasharray: 1.6 1.1;
+  }
+  #plot-svg.is-editing .area {
+    cursor: grab;
+  }
+
+  .info {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+    box-shadow: var(--shadow);
+    position: sticky;
+    top: 5rem;
+    min-height: 200px;
+  }
+  .info h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.2rem;
+  }
+  .info h3 {
+    margin: 1rem 0 0.4rem;
+    font-size: 0.95rem;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .info__empty {
+    color: var(--muted);
+  }
+  .notes {
+    margin: 0.3rem 0;
+  }
+  .muted {
+    color: var(--muted);
+  }
+  .small {
+    font-size: 0.85rem;
+  }
+
+  .tags {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.4rem;
+  }
+  .tag {
+    --tag: var(--muted);
+    font-size: 0.74rem;
+    padding: 0.12rem 0.55rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--tag) 18%, white);
+    color: color-mix(in srgb, var(--tag) 70%, black);
+    border: 1px solid color-mix(in srgb, var(--tag) 40%, white);
+  }
+  .tag--warn {
+    --tag: #b9842b;
+  }
+  .tag--soft {
+    --tag: #4f7d3f;
+  }
+
+  .plantings,
+  .tasks {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .plantings li {
+    border-left: 3px solid var(--line);
+    padding-left: 0.6rem;
+  }
+  .planting-meta {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    margin: 0.15rem 0;
+  }
+  .tasks li {
+    border-left: 3px solid var(--accent-2);
+    padding-left: 0.6rem;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin: 0.5rem 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .field input,
+  .field select,
+  .field textarea {
+    font: inherit;
+    font-size: 0.95rem;
+    color: var(--ink);
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+  }
+  .field--check {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .legend {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.6rem 1rem;
+  }
+  .legend summary {
+    cursor: pointer;
+    color: var(--muted);
+  }
+  #legend-list {
+    list-style: none;
+    padding: 0.6rem 0 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.1rem;
+    font-size: 0.85rem;
+  }
+  #legend-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .swatch {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 3px;
+    display: inline-block;
+  }
+
+  #export-dialog {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 1.2rem;
+    max-width: 560px;
+    width: 90vw;
+  }
+  #export-dialog textarea {
+    width: 100%;
+    font-family: ui-monospace, monospace;
+    font-size: 0.78rem;
+  }
+  #export-dialog menu {
+    padding: 0;
+    margin: 0.6rem 0 0;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  @media (max-width: 760px) {
+    .plot__grid {
+      grid-template-columns: 1fr;
+    }
+    .info {
+      position: static;
+    }
+    #plot-svg {
+      height: min(70vh, 620px);
+    }
+  }
+</style>

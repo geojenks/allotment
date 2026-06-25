@@ -1,0 +1,47 @@
+---
+import Base from '../layouts/Base.astro';
+import PlotMap from '../components/PlotMap.astro';
+import plotData from '../data/areas.json';
+
+const total = plotData.areas.length;
+const provisional = plotData.areas.filter((a) => a.provisional).length;
+---
+
+<Base title="The Allotment — Plot">
+  <section class="intro">
+    <h1>The plot</h1>
+    <p>
+      A living plan of the allotment — tap any area to see what's planted,
+      what's planned, and what needs doing. {total} areas mapped.
+      {
+        provisional > 0 && (
+          <span class="warnline">
+            {provisional} area names are still my best guess — switch to
+            <strong>Edit areas</strong> to rename or reshape them.
+          </span>
+        )
+      }
+    </p>
+  </section>
+
+  <PlotMap />
+</Base>
+
+<style>
+  .intro {
+    margin-bottom: 1rem;
+  }
+  .intro h1 {
+    margin: 0 0 0.3rem;
+  }
+  .intro p {
+    color: var(--muted);
+    max-width: 60ch;
+    margin: 0;
+  }
+  .warnline {
+    display: block;
+    margin-top: 0.4rem;
+    color: var(--accent-2);
+  }
+</style>

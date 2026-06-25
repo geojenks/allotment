@@ -1,0 +1,132 @@
+---
+interface Props {
+  title?: string;
+}
+const { title = 'Allotment' } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '') + '/';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="A living plan and journal for the allotment." />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href={base}>🌱 The Allotment</a>
+      <nav>
+        <a href={base}>Plot</a>
+      </nav>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <p>15&nbsp;m plot · planted, planned &amp; in progress</p>
+    </footer>
+
+    <style is:global>
+      :root {
+        --bg: #f4f1ea;
+        --panel: #ffffff;
+        --ink: #23291f;
+        --muted: #6b7363;
+        --line: #d9d4c7;
+        --accent: #4f7d3f;
+        --accent-2: #b9842b;
+        --shadow: 0 6px 24px rgba(40, 50, 30, 0.12);
+        --radius: 14px;
+        font-synthesis: none;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family:
+          'Iowan Old Style', 'Palatino Linotype', Palatino, 'Hoefler Text',
+          Georgia, serif;
+        color: var(--ink);
+        background:
+          radial-gradient(1200px 600px at 80% -10%, #eef3e6, transparent),
+          var(--bg);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        line-height: 1.5;
+      }
+
+      .site-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.9rem 1.4rem;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: blur(6px);
+        position: sticky;
+        top: 0;
+        z-index: 20;
+      }
+
+      .brand {
+        font-weight: 700;
+        font-size: 1.15rem;
+        text-decoration: none;
+        color: var(--ink);
+        letter-spacing: 0.2px;
+      }
+
+      .site-header nav a {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 0.95rem;
+        margin-left: 1rem;
+      }
+      .site-header nav a:hover {
+        color: var(--accent);
+      }
+
+      main {
+        flex: 1;
+        width: 100%;
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 1.4rem;
+      }
+
+      .site-footer {
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.85rem;
+        text-align: center;
+        padding: 1rem;
+      }
+
+      h1,
+      h2,
+      h3 {
+        font-family:
+          ui-rounded, 'Segoe UI', system-ui, -apple-system, sans-serif;
+        line-height: 1.2;
+      }
+
+      a {
+        color: var(--accent);
+      }
+    </style>
+  </body>
+</html>
