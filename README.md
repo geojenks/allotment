@@ -21,10 +21,27 @@ calendar — coming next), and per-area (a timeline — coming next).
 ## The map
 
 - **View** — tap any numbered area to see its details in the side panel.
-- **Edit areas** — drag an area to move it, drag its bottom-right corner to
-  resize, **+ Add area** to create one, edit its name/type/notes, then
-  **Copy JSON** and paste the result into `src/data/areas.json` to save.
-  (Beds move around — this is how you keep the map matching reality.)
+- **Zoom in** — select an area then **Zoom in** (or double-click it) to focus on
+  that bed. Plant icons only appear at this level.
+- **Plant icons** — when zoomed in, pick an icon from the palette and tap to drop
+  it; drag to move; drag the handle or use the Radius slider to set its footprint.
+  The plot overview shows a `🌱 N` count per bed instead of the icons.
+- **Edit** — drag an area to move it, drag its corner to resize, **+ Area** to
+  create one, edit its name/type/notes.
+
+### Saving your changes
+
+Edits auto-save to your browser (localStorage), so a refresh never loses them.
+When you have changes not yet on the live site, a status bar appears with:
+
+- **Save to website** — commits `areas.json` straight to GitHub via a token, so
+  the live site updates in ~1 minute. The first time, you paste a token: create a
+  [fine-grained token](https://github.com/settings/tokens?type=beta) scoped to the
+  **allotment** repo with **Contents: Read and write**. It's stored only on your
+  device. (This is the only way to persist from a phone — a static site has no
+  server of its own.)
+- **Download** / **Copy** — get the JSON to commit by hand instead.
+- **Discard** — revert this device to the version that's live.
 
 > The area names are an initial best guess from your description (assuming the
 > **top** of the photo is the back/fence end). Open the map and correct
