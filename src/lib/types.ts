@@ -137,3 +137,62 @@ export interface PlotData {
   areas: Area[];
   markers?: PlantMarker[];
 }
+
+/** A month window, 1 = January … 12 = December. Wraps if from > to (e.g. Nov→Feb). */
+export interface MonthWindow {
+  from: number;
+  to: number;
+}
+
+/** A seed packet in the seed bank — the catalogue + advisory sowing windows. */
+export interface Seed {
+  id: string;
+  crop: string;
+  variety?: string;
+  family: CropFamily;
+  sowIndoors?: MonthWindow; // "sow under glass"
+  sowOutdoors?: MonthWindow; // "sow direct"
+  harvest?: MonthWindow;
+  spacing?: string;
+  depth?: string;
+  supplier?: string;
+  inStock?: boolean;
+  notes?: string;
+}
+
+export type NurseryLocation = 'greenhouse' | 'polytunnel' | 'nursery' | 'windowsill' | 'outdoor';
+
+/** Stages a sowing passes through. A 'planted-out' sowing has left the nursery. */
+export type SowingStage =
+  | 'sown'
+  | 'germinated'
+  | 'potted-on'
+  | 'hardening-off'
+  | 'planted-out'
+  | 'failed';
+
+/**
+ * An actual sowing instance. Recording one is what puts it on the real calendar
+ * (as opposed to the advisory packet windows). Under-glass sowings live in the
+ * nursery until 'planted-out', when they (optionally) link to an allotment area.
+ */
+export interface Sowing {
+  id: string;
+  seedId?: string; // links back to the seed-bank packet
+  crop: string;
+  variety?: string;
+  family: CropFamily;
+  sownDate: string; // ISO date
+  location: NurseryLocation;
+  underGlass: boolean; // started under cover (nursery) vs sown direct
+  stage: SowingStage;
+  destinationAreaId?: string; // target allotment area, if any
+  plantedOutDate?: string; // ISO date
+  notes?: string;
+}
+
+/** The whole seeds file: src/data/seeds.json. */
+export interface SeedData {
+  seeds: Seed[];
+  sowings: Sowing[];
+}

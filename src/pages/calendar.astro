@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import areasData from '../data/areas.json';
+import seedsData from '../data/seeds.json';
 
 // Build a chronological agenda from the plot data: sowings, plant-outs,
 // harvest windows and dated tasks. (Photo-timeline events will join these later.)
@@ -37,6 +38,31 @@ for (const area of areasData.areas) {
     if (date) events.push({ date, kind: 'task', title: t.title, area: area.name, detail: t.notes });
     else undated.push({ title: t.title, area: area.name, detail: t.notes });
   }
+}
+
+// Actual sowings/plant-outs from the seed bank become real calendar events.
+const LOC: Record<string, string> = {
+  greenhouse: 'Greenhouse', polytunnel: 'Polytunnel', nursery: 'Nursery bed',
+  windowsill: 'Windowsill', outdoor: 'Direct outdoors',
+};
+for (const s of seedsData.sowings ?? []) {
+  const name = `${s.crop}${s.variety ? ' — ' + s.variety : ''}`;
+  events.push({ date: s.sownDate, kind: 'sow', title: `Sow ${name}`, area: LOC[s.location] ?? s.location });
+  if (s.plantedOutDate) {
+    const dest = areasData.areas.find((a) => a.id === s.destinationAreaId)?.name;
+    events.push({ date: s.plantedOutDate, kind: 'plant', title: `Plant out ${name}`, area: dest ?? 'the allotment' });
+  }
+}
+
+// Advisory: which packets fall in a sowing window this month.
+const nowMonth = new Date().getMonth() + 1;
+const monthIn = (m: number, w?: { from: number; to: number }) =>
+  w ? (w.from <= w.to ? m >= w.from && m <= w.to : m >= w.from || m <= w.to) : false;
+const sowNow: { name: string; kind: 'indoors' | 'direct' }[] = [];
+for (const s of seedsData.seeds ?? []) {
+  const name = `${s.crop}${s.variety ? ' · ' + s.variety : ''}`;
+  if (monthIn(nowMonth, s.sowIndoors)) sowNow.push({ name, kind: 'indoors' });
+  if (monthIn(nowMonth, s.sowOutdoors)) sowNow.push({ name, kind: 'direct' });
 }
 
 events.sort((a, b) => a.date.localeCompare(b.date));
@@ -79,6 +105,22 @@ const KIND = {
       sowing dates, harvest windows and jobs to each area.
     </p>
   </header>
+
+  {
+    sowNow.length > 0 && (
+      <section class="sownow">
+        <h2>Sow this month</h2>
+        <div class="sownow__list">
+          {sowNow.map((s) => (
+            <span class={`sownow__chip sownow__chip--${s.kind}`}>
+              {s.name} <em>{s.kind === 'indoors' ? 'indoors' : 'direct'}</em>
+            </span>
+          ))}
+        </div>
+        <a class="sownow__link" href="../seeds">Open the seed bank →</a>
+      </section>
+    )
+  }
 
   {
     months.length === 0 && undated.length === 0 ? (
@@ -150,6 +192,43 @@ const KIND = {
 <style>
   .empty {
     color: var(--muted);
+  }
+  .sownow {
+    background: var(--green-100);
+    border: 1px solid color-mix(in srgb, var(--green) 22%, white);
+    border-radius: var(--radius);
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.6rem;
+  }
+  .sownow h2 {
+    font-size: 1.05rem;
+    margin-bottom: 0.5rem;
+  }
+  .sownow__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.5rem;
+  }
+  .sownow__chip {
+    font-size: 0.84rem;
+    border-radius: 999px;
+    padding: 0.22rem 0.65rem;
+    background: var(--panel);
+    border: 1px solid var(--line-strong);
+  }
+  .sownow__chip em {
+    font-style: normal;
+    font-weight: 700;
+    color: var(--green-700);
+  }
+  .sownow__chip--direct em {
+    color: var(--accent);
+  }
+  .sownow__link {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
   }
   .agenda {
     display: flex;

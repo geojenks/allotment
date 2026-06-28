@@ -1,0 +1,93 @@
+{
+  "_comment": "Seed bank + sowings. `seeds` is your packet catalogue (months are 1-12). `sowings` are actual sowings you've recorded — these drive the real calendar and the Nursery page. Edit on the Seeds/Nursery pages and 'Save to website'.",
+  "seeds": [
+    {
+      "id": "tomato-gardeners-delight",
+      "crop": "Tomato",
+      "variety": "Gardener's Delight",
+      "family": "solanaceae",
+      "sowIndoors": { "from": 2, "to": 4 },
+      "harvest": { "from": 7, "to": 10 },
+      "spacing": "45cm",
+      "depth": "5mm",
+      "inStock": true,
+      "notes": "Cordon. Pinch out side shoots. Grows on at home in the greenhouse."
+    },
+    {
+      "id": "cabbage-greyhound",
+      "crop": "Cabbage",
+      "variety": "Greyhound",
+      "family": "brassica",
+      "sowIndoors": { "from": 3, "to": 4 },
+      "sowOutdoors": { "from": 4, "to": 6 },
+      "harvest": { "from": 6, "to": 9 },
+      "spacing": "30cm",
+      "depth": "1.5cm",
+      "inStock": true,
+      "notes": "Fast pointed summer cabbage. Net against pigeons and cabbage white."
+    },
+    {
+      "id": "carrot-nantes",
+      "crop": "Carrot",
+      "variety": "Nantes 2",
+      "family": "apiaceae",
+      "sowOutdoors": { "from": 4, "to": 7 },
+      "harvest": { "from": 7, "to": 10 },
+      "spacing": "thin to 5cm",
+      "depth": "1cm",
+      "inStock": true,
+      "notes": "Direct sow only — dislikes transplanting. Sow little and often."
+    },
+    {
+      "id": "french-bean-cobra",
+      "crop": "French bean",
+      "variety": "Cobra",
+      "family": "legume",
+      "sowIndoors": { "from": 5, "to": 5 },
+      "sowOutdoors": { "from": 6, "to": 6 },
+      "harvest": { "from": 8, "to": 9 },
+      "spacing": "20cm",
+      "depth": "5cm",
+      "inStock": true,
+      "notes": "Climbing. Tender — don't sow out until frost risk has passed."
+    },
+    {
+      "id": "basil-sweet",
+      "crop": "Basil",
+      "variety": "Sweet Genovese",
+      "family": "other",
+      "sowIndoors": { "from": 3, "to": 5 },
+      "harvest": { "from": 6, "to": 9 },
+      "depth": "surface",
+      "inStock": true,
+      "notes": "Stays in the home greenhouse. Keep warm; pinch tips to bush out."
+    }
+  ],
+  "sowings": [
+    {
+      "id": "sow-cabbage-2026",
+      "seedId": "cabbage-greyhound",
+      "crop": "Cabbage",
+      "variety": "Greyhound",
+      "family": "brassica",
+      "sownDate": "2026-05-20",
+      "location": "greenhouse",
+      "underGlass": true,
+      "stage": "planted-out",
+      "plantedOutDate": "2026-06-25",
+      "notes": "Nursed ~5 weeks in the greenhouse, then planted out at the allotment."
+    },
+    {
+      "id": "sow-tomato-2026",
+      "seedId": "tomato-gardeners-delight",
+      "crop": "Tomato",
+      "variety": "Gardener's Delight",
+      "family": "solanaceae",
+      "sownDate": "2026-03-01",
+      "location": "greenhouse",
+      "underGlass": true,
+      "stage": "potted-on",
+      "notes": "Staying in the home greenhouse to fruit."
+    }
+  ]
+}

@@ -1,0 +1,312 @@
+---
+import Base from '../layouts/Base.astro';
+import seedsData from '../data/seeds.json';
+const count = seedsData.seeds.length;
+---
+
+<Base title="Allotment — Seeds" active="seeds">
+  <header class="page-head">
+    <p class="eyebrow">Seed bank</p>
+    <h1>Seeds</h1>
+    <p>Your packets and their sowing windows. Sow one to start it off in the nursery or direct in a bed — only then does it land on the calendar.</p>
+  </header>
+
+  <div id="bar" class="savebar" hidden>
+    <span class="savebar__label">Unsaved changes</span>
+    <button id="publish" class="ctl ctl--primary" type="button">Save to website</button>
+    <button id="discard" class="ctl ctl--ghost" type="button">Discard</button>
+    <span id="bar-status" class="savebar__status"></span>
+  </div>
+
+  <section id="sownow" class="sownow" hidden>
+    <h2>Sow now <span class="muted">(this month)</span></h2>
+    <div id="sownow-list" class="sownow__list"></div>
+  </section>
+
+  <div class="toolbar">
+    <button id="add-seed" class="ctl" type="button">+ Add seed</button>
+    <span class="muted small" id="seed-count"></span>
+  </div>
+
+  <ul id="seed-grid" class="grid"></ul>
+
+  <dialog id="seed-dialog" class="dialog">
+    <form id="seed-form" method="dialog"></form>
+  </dialog>
+  <dialog id="sow-dialog" class="dialog">
+    <form id="sow-form" method="dialog"></form>
+  </dialog>
+</Base>
+
+<script>
+  import seedsData from '../data/seeds.json';
+  import areasData from '../data/areas.json';
+  import { getToken, commitFiles, overlayLoad, overlaySave, overlayClear, uid, todayStr } from '../lib/datastore';
+
+  const KEY = 'allotment:seeds:v1';
+  const PATH = 'src/data/seeds.json';
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const FAMILIES = [
+    ['brassica', 'Brassicas'], ['legume', 'Legumes'], ['allium', 'Alliums'],
+    ['solanaceae', 'Potato family'], ['apiaceae', 'Umbellifers'], ['cucurbit', 'Cucurbits'],
+    ['chenopod', 'Beets & chard'], ['other', 'Other / herb'], ['flower', 'Flowers'],
+  ];
+  const LOCATIONS = [
+    ['greenhouse', 'Home greenhouse'], ['polytunnel', 'Polytunnel'], ['nursery', 'Nursery bed'],
+    ['windowsill', 'Windowsill'], ['outdoor', 'Direct outdoors'],
+  ];
+  const monthIn = (m, w) => (w ? (w.from <= w.to ? m >= w.from && m <= w.to : m >= w.from || m <= w.to) : false);
+  const famLabel = (f) => (FAMILIES.find((x) => x[0] === f) || [, f])[1];
+
+  let data = overlayLoad(KEY, seedsData);
+  let baseline = JSON.stringify(seedsData);
+  const dirty = () => JSON.stringify(data) !== baseline;
+
+  const grid = document.getElementById('seed-grid');
+  const bar = document.getElementById('bar');
+  const barStatus = document.getElementById('bar-status');
+  const seedDialog = document.getElementById('seed-dialog');
+  const seedForm = document.getElementById('seed-form');
+  const sowDialog = document.getElementById('sow-dialog');
+  const sowForm = document.getElementById('sow-form');
+  const nowMonth = new Date().getMonth() + 1;
+
+  function save() { overlaySave(KEY, data); updateBar(); }
+  function updateBar() { bar.hidden = !dirty(); }
+
+  // ---- render ------------------------------------------------------------
+  function monthBar(label, win, accent) {
+    const row = document.createElement('div'); row.className = 'mbar';
+    const lab = document.createElement('span'); lab.className = 'mbar__label'; lab.textContent = label; row.append(lab);
+    const cells = document.createElement('div'); cells.className = 'mbar__cells';
+    for (let m = 1; m <= 12; m++) {
+      const c = document.createElement('span');
+      c.className = 'mcell' + (monthIn(m, win) ? ' is-on' : '') + (m === nowMonth ? ' is-now' : '');
+      if (monthIn(m, win)) c.style.background = accent;
+      cells.append(c);
+    }
+    row.append(cells); return row;
+  }
+
+  function render() {
+    grid.replaceChildren();
+    for (const s of data.seeds) grid.append(seedCard(s));
+    document.getElementById('seed-count').textContent = `${data.seeds.length} packet${data.seeds.length === 1 ? '' : 's'}`;
+    renderSowNow();
+    updateBar();
+  }
+
+  function seedCard(s) {
+    const li = document.createElement('li'); li.className = 'card seed';
+    const top = document.createElement('div'); top.className = 'seed__top';
+    const h = document.createElement('div');
+    const title = document.createElement('h3'); title.textContent = s.crop; h.append(title);
+    if (s.variety) { const v = document.createElement('span'); v.className = 'seed__var'; v.textContent = s.variety; h.append(v); }
+    top.append(h);
+    const fam = document.createElement('span'); fam.className = 'tagf'; fam.textContent = famLabel(s.family); top.append(fam);
+    li.append(top);
+
+    if (s.inStock === false) { const o = document.createElement('span'); o.className = 'oos'; o.textContent = 'out of stock'; li.append(o); }
+
+    const bars = document.createElement('div'); bars.className = 'bars';
+    bars.append(monthBar('Indoors', s.sowIndoors, '#7aa86a'));
+    bars.append(monthBar('Direct', s.sowOutdoors, '#5f8a36'));
+    bars.append(monthBar('Harvest', s.harvest, '#c2622d'));
+    li.append(bars);
+
+    if (s.spacing || s.depth) {
+      const meta = document.createElement('p'); meta.className = 'seed__meta muted small';
+      meta.textContent = [s.spacing && `spacing ${s.spacing}`, s.depth && `depth ${s.depth}`].filter(Boolean).join(' · ');
+      li.append(meta);
+    }
+    if (s.notes) { const n = document.createElement('p'); n.className = 'seed__notes'; n.textContent = s.notes; li.append(n); }
+
+    const actions = document.createElement('div'); actions.className = 'seed__actions';
+    const sow = document.createElement('button'); sow.type = 'button'; sow.className = 'ctl ctl--primary'; sow.textContent = '🌱 Sow';
+    sow.addEventListener('click', () => openSow(s));
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'ctl'; edit.textContent = 'Edit';
+    edit.addEventListener('click', () => openSeed(s));
+    actions.append(sow, edit); li.append(actions);
+    return li;
+  }
+
+  function renderSowNow() {
+    const wrap = document.getElementById('sownow');
+    const list = document.getElementById('sownow-list');
+    list.replaceChildren();
+    const items = [];
+    for (const s of data.seeds) {
+      if (monthIn(nowMonth, s.sowIndoors)) items.push({ s, kind: 'indoors' });
+      if (monthIn(nowMonth, s.sowOutdoors)) items.push({ s, kind: 'direct' });
+    }
+    wrap.hidden = items.length === 0;
+    for (const it of items) {
+      const chip = document.createElement('button'); chip.type = 'button'; chip.className = `sownow__chip sownow__chip--${it.kind}`;
+      chip.textContent = `${it.s.crop}${it.s.variety ? ' · ' + it.s.variety : ''} — sow ${it.kind === 'indoors' ? 'indoors' : 'direct'}`;
+      chip.addEventListener('click', () => openSow(it.s, it.kind === 'direct' ? 'outdoor' : 'greenhouse'));
+      list.append(chip);
+    }
+  }
+
+  // ---- forms -------------------------------------------------------------
+  function field(label, node) {
+    const w = document.createElement('label'); w.className = 'field';
+    const s = document.createElement('span'); s.textContent = label; w.append(s, node); return w;
+  }
+  function monthSelect(val) {
+    const sel = document.createElement('select');
+    const none = document.createElement('option'); none.value = ''; none.textContent = '—'; sel.append(none);
+    for (let m = 1; m <= 12; m++) { const o = document.createElement('option'); o.value = String(m); o.textContent = MONTHS[m - 1]; if (val === m) o.selected = true; sel.append(o); }
+    return sel;
+  }
+  function windowRow(label, win) {
+    const from = monthSelect(win?.from), to = monthSelect(win?.to);
+    const row = document.createElement('div'); row.className = 'wrow';
+    const l = document.createElement('span'); l.className = 'wrow__label'; l.textContent = label;
+    const inner = document.createElement('div'); inner.className = 'wrow__sel';
+    inner.append(from, document.createTextNode('→'), to);
+    row.append(l, inner);
+    return { row, get: () => (from.value && to.value ? { from: +from.value, to: +to.value } : undefined) };
+  }
+
+  function openSeed(seed) {
+    const editing = !!seed;
+    seedForm.replaceChildren();
+    const h = document.createElement('h3'); h.textContent = editing ? 'Edit seed' : 'Add seed'; seedForm.append(h);
+    const crop = document.createElement('input'); crop.type = 'text'; crop.required = true; crop.value = seed?.crop || ''; seedForm.append(field('Crop', crop));
+    const variety = document.createElement('input'); variety.type = 'text'; variety.value = seed?.variety || ''; seedForm.append(field('Variety', variety));
+    const family = document.createElement('select');
+    for (const [v, l] of FAMILIES) { const o = document.createElement('option'); o.value = v; o.textContent = l; if ((seed?.family || 'other') === v) o.selected = true; family.append(o); }
+    seedForm.append(field('Family', family));
+    const wi = windowRow('Sow indoors', seed?.sowIndoors); seedForm.append(wi.row);
+    const wo = windowRow('Sow direct', seed?.sowOutdoors); seedForm.append(wo.row);
+    const wh = windowRow('Harvest', seed?.harvest); seedForm.append(wh.row);
+    const spacing = document.createElement('input'); spacing.type = 'text'; spacing.value = seed?.spacing || ''; seedForm.append(field('Spacing', spacing));
+    const depth = document.createElement('input'); depth.type = 'text'; depth.value = seed?.depth || ''; seedForm.append(field('Depth', depth));
+    const notes = document.createElement('textarea'); notes.rows = 2; notes.value = seed?.notes || ''; seedForm.append(field('Notes', notes));
+    const stockRow = document.createElement('label'); stockRow.className = 'field field--check';
+    const stock = document.createElement('input'); stock.type = 'checkbox'; stock.checked = seed ? seed.inStock !== false : true;
+    const ss = document.createElement('span'); ss.textContent = 'In stock'; stockRow.append(stock, ss); seedForm.append(stockRow);
+
+    const menu = document.createElement('div'); menu.className = 'dialog__menu';
+    if (editing) { const del = document.createElement('button'); del.type = 'button'; del.className = 'danger'; del.textContent = 'Delete'; del.addEventListener('click', () => { data.seeds = data.seeds.filter((x) => x.id !== seed.id); save(); render(); seedDialog.close(); }); menu.append(del); }
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'ctl ctl--ghost'; cancel.textContent = 'Cancel'; cancel.addEventListener('click', () => seedDialog.close());
+    const ok = document.createElement('button'); ok.type = 'submit'; ok.className = 'ctl ctl--primary'; ok.textContent = editing ? 'Save' : 'Add';
+    menu.append(cancel, ok); seedForm.append(menu);
+
+    seedForm.onsubmit = () => {
+      if (!crop.value.trim()) return;
+      const rec = {
+        id: seed?.id || uid('seed-'), crop: crop.value.trim(), variety: variety.value.trim() || undefined,
+        family: family.value, sowIndoors: wi.get(), sowOutdoors: wo.get(), harvest: wh.get(),
+        spacing: spacing.value.trim() || undefined, depth: depth.value.trim() || undefined,
+        inStock: stock.checked, notes: notes.value.trim() || undefined,
+      };
+      if (seed) Object.assign(seed, rec, { id: seed.id }); else data.seeds.push(rec);
+      save(); render();
+    };
+    seedDialog.showModal();
+  }
+
+  function openSow(seed, presetLoc) {
+    sowForm.replaceChildren();
+    const h = document.createElement('h3'); h.textContent = `Sow ${seed.crop}${seed.variety ? ' · ' + seed.variety : ''}`; sowForm.append(h);
+    const date = document.createElement('input'); date.type = 'date'; date.value = todayStr(); date.max = todayStr(); sowForm.append(field('Date sown', date));
+    const loc = document.createElement('select');
+    for (const [v, l] of LOCATIONS) { const o = document.createElement('option'); o.value = v; o.textContent = l; if ((presetLoc || 'greenhouse') === v) o.selected = true; loc.append(o); }
+    sowForm.append(field('Where', loc));
+    const dest = document.createElement('select');
+    const dn = document.createElement('option'); dn.value = ''; dn.textContent = '— none yet —'; dest.append(dn);
+    for (const a of areasData.areas) { const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; dest.append(o); }
+    sowForm.append(field('Destination bed (optional)', dest));
+    const notes = document.createElement('textarea'); notes.rows = 2; notes.value = ''; sowForm.append(field('Notes', notes));
+
+    const menu = document.createElement('div'); menu.className = 'dialog__menu';
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'ctl ctl--ghost'; cancel.textContent = 'Cancel'; cancel.addEventListener('click', () => sowDialog.close());
+    const ok = document.createElement('button'); ok.type = 'submit'; ok.className = 'ctl ctl--primary'; ok.textContent = 'Sow it';
+    menu.append(cancel, ok); sowForm.append(menu);
+
+    sowForm.onsubmit = () => {
+      const sowing = {
+        id: uid('sow-'), seedId: seed.id, crop: seed.crop, variety: seed.variety, family: seed.family,
+        sownDate: date.value || todayStr(), location: loc.value, underGlass: loc.value !== 'outdoor',
+        stage: 'sown', destinationAreaId: dest.value || undefined, notes: notes.value.trim() || undefined,
+      };
+      data.sowings.push(sowing); save();
+      barStatus.textContent = sowing.underGlass ? 'Added to the Nursery →' : 'Logged on the Calendar →';
+      setTimeout(() => (barStatus.textContent = ''), 4000);
+    };
+    sowDialog.showModal();
+  }
+
+  // ---- publish bar -------------------------------------------------------
+  document.getElementById('add-seed').addEventListener('click', () => openSeed(null));
+  document.getElementById('publish').addEventListener('click', async () => {
+    const token = await getToken(); if (!token) return;
+    barStatus.textContent = 'Saving…';
+    try { await commitFiles(token, [{ path: PATH, text: JSON.stringify(data, null, 2) }], 'Update seeds'); baseline = JSON.stringify(data); updateBar(); barStatus.textContent = '✓ Saved — live in ~1 min.'; }
+    catch (e) { barStatus.textContent = e.message === 'auth' ? 'Auth failed — check token.' : 'Error: ' + e.message; }
+  });
+  document.getElementById('discard').addEventListener('click', () => {
+    if (!confirm('Discard local changes and revert to the saved version?')) return;
+    overlayClear(KEY); data = structuredClone(seedsData); render(); barStatus.textContent = '';
+  });
+  for (const d of [seedDialog, sowDialog]) d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+
+  render();
+</script>
+
+<style>
+  .savebar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, white); border-radius: var(--radius-sm); padding: 0.5rem 0.8rem; margin-bottom: 1.2rem; }
+  .savebar__label { font-weight: 700; color: var(--accent); }
+  .savebar__status { color: var(--green-700); font-size: 0.85rem; }
+
+  .ctl { font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); }
+  .ctl:hover { border-color: var(--green); }
+  .ctl--primary { background: var(--green); color: #fff; border-color: var(--green); }
+  .ctl--ghost { color: var(--muted); border-color: transparent; }
+  .danger { font: inherit; font-weight: 600; cursor: pointer; border: 1px solid #e3b8b0; color: #a23b2b; background: var(--panel); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); }
+
+  .sownow { background: var(--green-100); border: 1px solid color-mix(in srgb, var(--green) 22%, white); border-radius: var(--radius); padding: 0.9rem 1.1rem; margin-bottom: 1.3rem; }
+  .sownow h2 { font-size: 1.05rem; margin-bottom: 0.5rem; }
+  .sownow__list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .sownow__chip { font: inherit; font-size: 0.84rem; cursor: pointer; border-radius: 999px; padding: 0.25rem 0.7rem; border: 1px solid; background: var(--panel); }
+  .sownow__chip--indoors { border-color: #7aa86a; color: #3c6b3a; }
+  .sownow__chip--direct { border-color: var(--green); color: var(--green-700); }
+
+  .toolbar { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
+
+  .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1rem; }
+  .seed { padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; gap: 0.55rem; }
+  .seed__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+  .seed__top h3 { font-size: 1.12rem; }
+  .seed__var { color: var(--muted); font-size: 0.88rem; }
+  .tagf { font-size: 0.7rem; font-weight: 600; padding: 0.16rem 0.55rem; border-radius: 999px; background: var(--paper-2); color: var(--ink-soft); white-space: nowrap; }
+  .oos { align-self: flex-start; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); }
+
+  .bars { display: flex; flex-direction: column; gap: 0.3rem; }
+  .mbar { display: grid; grid-template-columns: 4.2rem 1fr; align-items: center; gap: 0.5rem; }
+  .mbar__label { font-size: 0.74rem; color: var(--muted); }
+  .mbar__cells { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; }
+  .mcell { height: 12px; border-radius: 2px; background: var(--paper-2); }
+  .mcell.is-now { outline: 1.5px solid var(--ink); outline-offset: 1px; }
+
+  .seed__meta { margin: 0; }
+  .seed__notes { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
+  .seed__actions { display: flex; gap: 0.4rem; margin-top: 0.2rem; }
+
+  .dialog { border: 1px solid var(--line); border-radius: var(--radius); padding: 0; max-width: 460px; width: 92vw; box-shadow: var(--shadow); }
+  .dialog::backdrop { background: rgba(20, 28, 18, 0.4); }
+  .dialog form { padding: 1.2rem; display: flex; flex-direction: column; gap: 0.2rem; }
+  .dialog h3 { margin-bottom: 0.5rem; }
+  .field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.35rem 0; font-size: 0.8rem; color: var(--muted); }
+  .field input, .field select, .field textarea { font: inherit; font-size: 0.95rem; color: var(--ink); padding: 0.4rem 0.55rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; }
+  .field--check { flex-direction: row; align-items: center; gap: 0.5rem; }
+  .wrow { display: grid; grid-template-columns: 6rem 1fr; align-items: center; gap: 0.5rem; margin: 0.35rem 0; font-size: 0.8rem; color: var(--muted); }
+  .wrow__sel { display: flex; align-items: center; gap: 0.4rem; }
+  .wrow__sel select { font: inherit; padding: 0.3rem 0.4rem; border: 1px solid var(--line-strong); border-radius: 8px; }
+  .dialog__menu { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.8rem; }
+  .dialog__menu .danger { margin-right: auto; }
+
+  .muted { color: var(--muted); } .small { font-size: 0.85rem; }
+</style>

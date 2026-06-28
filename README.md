@@ -82,10 +82,21 @@ npm run build    # outputs to dist/
 If you use a different repo name or a custom domain, update `site` and `base`
 in [`astro.config.mjs`](astro.config.mjs).
 
+## Sections
+
+- **Layout** — the interactive plot map (`src/data/areas.json`).
+- **Calendar** — agenda derived from plantings, dated tasks, and actual sowings.
+- **Seeds** — the seed bank (`src/data/seeds.json`): packet windows + "sow now".
+- **Nursery** — active sowings under glass, stage tracking and plant-out.
+- **Plans** — beds free vs planted, rotation reference.
+- **Projects** — bigger jobs (`src/data/projects.json`).
+
 ## Roadmap
 
 - [x] Interactive plot map (view + edit/add areas)
-- [ ] Per-area photo timeline
-- [ ] Calendar / chronological "what to do when" view
+- [x] Per-area photo timeline
+- [x] Calendar / chronological "what to do when" view
+- [x] Seed bank → nursery → calendar pipeline
+- [ ] Smoother map zoom/pan (phone pinch tuning)
 - [ ] Crop-rotation helper (warns when a plant family returns to a bed too soon)
 - [ ] Companion-planting suggestions

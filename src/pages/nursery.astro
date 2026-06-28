@@ -1,0 +1,200 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Allotment — Nursery" active="nursery">
+  <header class="page-head">
+    <p class="eyebrow">Propagation</p>
+    <h1>Nursery</h1>
+    <p>What's coming on under glass for the plot — track each sowing's stage, then plant it out to a bed.</p>
+  </header>
+
+  <div id="bar" class="savebar" hidden>
+    <span class="savebar__label">Unsaved changes</span>
+    <button id="publish" class="ctl ctl--primary" type="button">Save to website</button>
+    <button id="discard" class="ctl ctl--ghost" type="button">Discard</button>
+    <span id="bar-status" class="savebar__status"></span>
+  </div>
+
+  <section>
+    <h2 class="sec">Growing on <span id="active-count" class="muted"></span></h2>
+    <ul id="active" class="grid"></ul>
+    <p id="active-empty" class="empty" hidden>Nothing in the nursery right now. Sow something from the <a href="../seeds">Seeds</a> page.</p>
+  </section>
+
+  <section>
+    <h2 class="sec">Planted out</h2>
+    <ul id="done" class="done-list"></ul>
+    <p id="done-empty" class="empty" hidden>Nothing planted out yet.</p>
+  </section>
+
+  <dialog id="po-dialog" class="dialog">
+    <form id="po-form" method="dialog"></form>
+  </dialog>
+</Base>
+
+<script>
+  import seedsData from '../data/seeds.json';
+  import areasData from '../data/areas.json';
+  import { getToken, commitFiles, overlayLoad, overlaySave, overlayClear, todayStr } from '../lib/datastore';
+
+  const KEY = 'allotment:seeds:v1';
+  const PATH = 'src/data/seeds.json';
+  const STAGES = ['sown', 'germinated', 'potted-on', 'hardening-off', 'planted-out'];
+  const STAGE_LABEL = { sown: 'Sown', germinated: 'Germinated', 'potted-on': 'Potted on', 'hardening-off': 'Hardening off', 'planted-out': 'Planted out', failed: 'Failed' };
+  const LOC_LABEL = { greenhouse: 'Greenhouse', polytunnel: 'Polytunnel', nursery: 'Nursery bed', windowsill: 'Windowsill', outdoor: 'Outdoors' };
+  const areaName = (id) => areasData.areas.find((a) => a.id === id)?.name;
+  const fmt = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const daysOld = (d) => Math.max(0, Math.round((Date.now() - new Date(d + 'T00:00:00').getTime()) / 86400000));
+
+  let data = overlayLoad(KEY, seedsData);
+  let baseline = JSON.stringify(seedsData);
+  const dirty = () => JSON.stringify(data) !== baseline;
+
+  const bar = document.getElementById('bar');
+  const barStatus = document.getElementById('bar-status');
+  const activeEl = document.getElementById('active');
+  const doneEl = document.getElementById('done');
+  const poDialog = document.getElementById('po-dialog');
+  const poForm = document.getElementById('po-form');
+
+  const save = () => { overlaySave(KEY, data); updateBar(); };
+  const updateBar = () => { bar.hidden = !dirty(); };
+
+  function render() {
+    const active = data.sowings.filter((s) => s.underGlass && s.stage !== 'planted-out' && s.stage !== 'failed');
+    const done = data.sowings.filter((s) => s.stage === 'planted-out').sort((a, b) => (b.plantedOutDate || '').localeCompare(a.plantedOutDate || ''));
+
+    activeEl.replaceChildren();
+    document.getElementById('active-empty').hidden = active.length > 0;
+    document.getElementById('active-count').textContent = active.length ? `· ${active.length}` : '';
+    for (const s of active) activeEl.append(activeCard(s));
+
+    doneEl.replaceChildren();
+    document.getElementById('done-empty').hidden = done.length > 0;
+    for (const s of done) doneEl.append(doneRow(s));
+    updateBar();
+  }
+
+  function activeCard(s) {
+    const li = document.createElement('li'); li.className = 'card item';
+    const top = document.createElement('div'); top.className = 'item__top';
+    const h = document.createElement('div');
+    const t = document.createElement('h3'); t.textContent = s.crop; h.append(t);
+    if (s.variety) { const v = document.createElement('span'); v.className = 'item__var'; v.textContent = s.variety; h.append(v); }
+    top.append(h);
+    const loc = document.createElement('span'); loc.className = 'tagf'; loc.textContent = LOC_LABEL[s.location] || s.location; top.append(loc);
+    li.append(top);
+
+    const age = document.createElement('p'); age.className = 'muted small'; age.textContent = `Sown ${fmt(s.sownDate)} · ${daysOld(s.sownDate)} days old`; li.append(age);
+
+    // stage stepper
+    const step = document.createElement('div'); step.className = 'stepper';
+    const idx = STAGES.indexOf(s.stage);
+    STAGES.slice(0, 4).forEach((st, i) => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = 'step' + (i <= idx ? ' is-done' : '') + (i === idx ? ' is-current' : '');
+      b.textContent = STAGE_LABEL[st]; b.title = 'Set stage: ' + STAGE_LABEL[st];
+      b.addEventListener('click', () => { s.stage = st; save(); render(); });
+      step.append(b);
+    });
+    li.append(step);
+
+    if (s.destinationAreaId && areaName(s.destinationAreaId)) { const d = document.createElement('p'); d.className = 'item__dest'; d.textContent = `→ ${areaName(s.destinationAreaId)}`; li.append(d); }
+    if (s.notes) { const n = document.createElement('p'); n.className = 'item__notes'; n.textContent = s.notes; li.append(n); }
+
+    const actions = document.createElement('div'); actions.className = 'item__actions';
+    const po = document.createElement('button'); po.type = 'button'; po.className = 'ctl ctl--primary'; po.textContent = '🪴 Plant out'; po.addEventListener('click', () => openPlantOut(s));
+    const fail = document.createElement('button'); fail.type = 'button'; fail.className = 'ctl ctl--ghost'; fail.textContent = 'Failed'; fail.addEventListener('click', () => { if (confirm('Mark as failed?')) { s.stage = 'failed'; save(); render(); } });
+    actions.append(po, fail); li.append(actions);
+    return li;
+  }
+
+  function doneRow(s) {
+    const li = document.createElement('li'); li.className = 'done-row';
+    const main = document.createElement('div');
+    const t = document.createElement('span'); t.className = 'done-crop'; t.textContent = `${s.crop}${s.variety ? ' · ' + s.variety : ''}`; main.append(t);
+    const meta = document.createElement('span'); meta.className = 'muted small';
+    meta.textContent = ` — out ${s.plantedOutDate ? fmt(s.plantedOutDate) : ''}${s.destinationAreaId && areaName(s.destinationAreaId) ? ' → ' + areaName(s.destinationAreaId) : ''}`;
+    main.append(meta); li.append(main);
+    const undo = document.createElement('button'); undo.type = 'button'; undo.className = 'ctl ctl--ghost small'; undo.textContent = 'Undo';
+    undo.addEventListener('click', () => { s.stage = 'hardening-off'; s.plantedOutDate = undefined; save(); render(); });
+    li.append(undo);
+    return li;
+  }
+
+  function field(label, node) { const w = document.createElement('label'); w.className = 'field'; const s = document.createElement('span'); s.textContent = label; w.append(s, node); return w; }
+
+  function openPlantOut(s) {
+    poForm.replaceChildren();
+    const h = document.createElement('h3'); h.textContent = `Plant out ${s.crop}${s.variety ? ' · ' + s.variety : ''}`; poForm.append(h);
+    const date = document.createElement('input'); date.type = 'date'; date.value = todayStr(); date.max = todayStr(); poForm.append(field('Date planted out', date));
+    const dest = document.createElement('select');
+    const dn = document.createElement('option'); dn.value = ''; dn.textContent = '— choose bed —'; dest.append(dn);
+    for (const a of areasData.areas) { const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; if (s.destinationAreaId === a.id) o.selected = true; dest.append(o); }
+    poForm.append(field('Into bed', dest));
+
+    const menu = document.createElement('div'); menu.className = 'dialog__menu';
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'ctl ctl--ghost'; cancel.textContent = 'Cancel'; cancel.addEventListener('click', () => poDialog.close());
+    const ok = document.createElement('button'); ok.type = 'submit'; ok.className = 'ctl ctl--primary'; ok.textContent = 'Plant out';
+    menu.append(cancel, ok); poForm.append(menu);
+
+    poForm.onsubmit = () => { s.stage = 'planted-out'; s.plantedOutDate = date.value || todayStr(); if (dest.value) s.destinationAreaId = dest.value; save(); render(); };
+    poDialog.showModal();
+  }
+
+  document.getElementById('publish').addEventListener('click', async () => {
+    const token = await getToken(); if (!token) return;
+    barStatus.textContent = 'Saving…';
+    try { await commitFiles(token, [{ path: PATH, text: JSON.stringify(data, null, 2) }], 'Update nursery / sowings'); baseline = JSON.stringify(data); updateBar(); barStatus.textContent = '✓ Saved — live in ~1 min.'; }
+    catch (e) { barStatus.textContent = e.message === 'auth' ? 'Auth failed — check token.' : 'Error: ' + e.message; }
+  });
+  document.getElementById('discard').addEventListener('click', () => { if (!confirm('Discard local changes and revert to the saved version?')) return; overlayClear(KEY); data = structuredClone(seedsData); render(); barStatus.textContent = ''; });
+  poDialog.addEventListener('click', (e) => { if (e.target === poDialog) poDialog.close(); });
+
+  render();
+</script>
+
+<style>
+  .savebar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, white); border-radius: var(--radius-sm); padding: 0.5rem 0.8rem; margin-bottom: 1.2rem; }
+  .savebar__label { font-weight: 700; color: var(--accent); }
+  .savebar__status { color: var(--green-700); font-size: 0.85rem; }
+
+  .ctl { font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); }
+  .ctl:hover { border-color: var(--green); }
+  .ctl--primary { background: var(--green); color: #fff; border-color: var(--green); }
+  .ctl--ghost { color: var(--muted); border-color: transparent; }
+  .ctl.small { padding: 0.25rem 0.55rem; font-size: 0.8rem; }
+  .danger { font: inherit; font-weight: 600; cursor: pointer; border: 1px solid #e3b8b0; color: #a23b2b; background: var(--panel); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); }
+
+  .sec { font-size: 1.2rem; margin: 1.4rem 0 0.9rem; }
+  .empty { color: var(--muted); }
+  .muted { color: var(--muted); } .small { font-size: 0.85rem; }
+
+  .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+  .item { padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+  .item__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
+  .item__top h3 { font-size: 1.1rem; }
+  .item__var { color: var(--muted); font-size: 0.88rem; }
+  .tagf { font-size: 0.7rem; font-weight: 600; padding: 0.16rem 0.55rem; border-radius: 999px; background: var(--paper-2); color: var(--ink-soft); white-space: nowrap; }
+  .item__dest { margin: 0; font-size: 0.85rem; color: var(--green-700); font-weight: 600; }
+  .item__notes { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
+  .item__actions { display: flex; gap: 0.4rem; margin-top: 0.2rem; }
+
+  .stepper { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+  .step { font: inherit; font-size: 0.74rem; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); border-radius: 999px; padding: 0.18rem 0.55rem; }
+  .step.is-done { background: var(--green-100); border-color: color-mix(in srgb, var(--green) 30%, white); color: var(--green-700); }
+  .step.is-current { background: var(--green); border-color: var(--green); color: #fff; }
+
+  .done-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+  .done-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.55rem 0.85rem; }
+  .done-crop { font-weight: 600; }
+
+  .dialog { border: 1px solid var(--line); border-radius: var(--radius); padding: 0; max-width: 420px; width: 92vw; box-shadow: var(--shadow); }
+  .dialog::backdrop { background: rgba(20, 28, 18, 0.4); }
+  .dialog form { padding: 1.2rem; display: flex; flex-direction: column; gap: 0.2rem; }
+  .dialog h3 { margin-bottom: 0.5rem; }
+  .field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.35rem 0; font-size: 0.8rem; color: var(--muted); }
+  .field input, .field select { font: inherit; font-size: 0.95rem; color: var(--ink); padding: 0.4rem 0.55rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; }
+  .dialog__menu { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.8rem; }
+</style>
