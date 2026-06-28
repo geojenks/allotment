@@ -7,7 +7,12 @@
       "name": "Back boundary — compost & bramble",
       "type": "boundary",
       "provisional": true,
-      "shape": { "x": 106.27347, "y": 55.763268, "w": 37.57959, "h": 7.2734694 },
+      "shape": {
+        "x": 106.27347,
+        "y": 55.763268,
+        "w": 37.57959,
+        "h": 7.2734694
+      },
       "notes": "Back metre near the fence: bramble and the compost heap."
     },
     {
@@ -15,7 +20,12 @@
       "name": "Rough ground — bramble, weeds, sheeted patch",
       "type": "wild",
       "provisional": true,
-      "shape": { "x": 106.27347, "y": 65.865311, "w": 35.559181, "h": 8.485714 },
+      "shape": {
+        "x": 106.27347,
+        "y": 65.865311,
+        "w": 35.559181,
+        "h": 8.485714
+      },
       "notes": "~2m overrun by bramble and weeds. Small patch under a sheet. Tool box at the bottom."
     },
     {
@@ -23,12 +33,35 @@
       "name": "Fruit tree row",
       "type": "tree",
       "provisional": true,
-      "shape": { "x": 107.08163, "y": 77.179588, "w": 33.134693, "h": 10.102041 },
+      "shape": {
+        "x": 107.08163,
+        "y": 77.179588,
+        "w": 33.134693,
+        "h": 10.102041
+      },
       "notes": "Left to right: small pear, large russet apple, then two very large Bramley apples.",
       "plantings": [
-        { "crop": "Pear", "family": "tree-fruit", "year": 2026, "status": "growing", "notes": "Small tree (far left)." },
-        { "crop": "Apple (russet)", "family": "tree-fruit", "year": 2026, "status": "growing", "notes": "Large tree." },
-        { "crop": "Apple (Bramley)", "family": "tree-fruit", "year": 2026, "status": "growing", "notes": "Two very large cookers." }
+        {
+          "crop": "Pear",
+          "family": "tree-fruit",
+          "year": 2026,
+          "status": "growing",
+          "notes": "Small tree (far left)."
+        },
+        {
+          "crop": "Apple (russet)",
+          "family": "tree-fruit",
+          "year": 2026,
+          "status": "growing",
+          "notes": "Large tree."
+        },
+        {
+          "crop": "Apple (Bramley)",
+          "family": "tree-fruit",
+          "year": 2026,
+          "status": "growing",
+          "notes": "Two very large cookers."
+        }
       ]
     },
     {
@@ -36,7 +69,12 @@
       "name": "Berry bush row",
       "type": "bushes",
       "provisional": true,
-      "shape": { "x": 105.86938, "y": 90.110207, "w": 33.538776, "h": 5.6571426 },
+      "shape": {
+        "x": 105.86938,
+        "y": 90.110207,
+        "w": 33.538776,
+        "h": 5.6571426
+      },
       "notes": "A metre-wide row of berry bushes (variety TBC)."
     },
     {
@@ -44,7 +82,12 @@
       "name": "Old potato patch (empty)",
       "type": "unused",
       "provisional": true,
-      "shape": { "x": 106.27347, "y": 97.605019, "w": 33.134693, "h": 8.0816326 },
+      "shape": {
+        "x": 106.27347,
+        "y": 97.605019,
+        "w": 33.134693,
+        "h": 8.0816326
+      },
       "notes": "~1m of essentially nothing — historic potato ground. Avoid potatoes/tomatoes here next while rotating."
     },
     {
@@ -52,18 +95,46 @@
       "name": "Bed 1 (left)",
       "type": "bed",
       "provisional": true,
-      "shape": { "x": 106.67755, "y": 107.48572, "w": 16.567347, "h": 9.2938766 },
-      "notes": "One of the two ~2.5m wide beds. Not well used yet."
+      "shape": {
+        "x": 106.67755,
+        "y": 107.48572,
+        "w": 16.567347,
+        "h": 9.2938766
+      },
+      "notes": "One of the two ~2.5m wide beds. Not well used yet.",
+      "events": [
+        {
+          "id": "ph-3pzre9",
+          "date": "2026-06-13",
+          "kind": "photo",
+          "photo": {
+            "src": "photos/bed-1-left/2026-06-13-ph-3pzre9.jpg",
+            "w": 720,
+            "h": 1280
+          }
+        }
+      ]
     },
     {
       "id": "bed-1-right",
       "name": "Bed 1 (right) — self-seeded potatoes",
       "type": "bed",
       "provisional": true,
-      "shape": { "x": 124.05306, "y": 107.48572, "w": 14.142858, "h": 9.2938766 },
+      "shape": {
+        "x": 125.408,
+        "y": 107.363,
+        "w": 14.142858,
+        "h": 9.2938766
+      },
       "notes": "Has wild/volunteer potatoes (not planted this year).",
       "plantings": [
-        { "crop": "Potato", "family": "solanaceae", "year": 2026, "status": "volunteer", "notes": "Self-seeded from a previous crop." }
+        {
+          "crop": "Potato",
+          "family": "solanaceae",
+          "year": 2026,
+          "status": "volunteer",
+          "notes": "Self-seeded from a previous crop."
+        }
       ]
     },
     {
@@ -71,10 +142,21 @@
       "name": "Asparagus bed",
       "type": "bed",
       "provisional": true,
-      "shape": { "x": 106.67755, "y": 119.60817, "w": 15.759183, "h": 7.6775508 },
+      "shape": {
+        "x": 106.67755,
+        "y": 119.60817,
+        "w": 15.759183,
+        "h": 7.6775508
+      },
       "notes": "Entirely occupied. Grown from seed, ~20cm tall.",
       "plantings": [
-        { "crop": "Asparagus", "family": "asparagus", "year": 2026, "status": "growing", "notes": "From seed, ~20cm tall. Perennial — don't rotate; no real harvest until established (~year 3)." }
+        {
+          "crop": "Asparagus",
+          "family": "asparagus",
+          "year": 2026,
+          "status": "growing",
+          "notes": "From seed, ~20cm tall. Perennial — don't rotate; no real harvest until established (~year 3)."
+        }
       ]
     },
     {
@@ -82,10 +164,31 @@
       "name": "PSB & celeriac bed",
       "type": "bed",
       "provisional": true,
-      "shape": { "x": 124.05306, "y": 118.8, "w": 15.759183, "h": 8.8897953 },
+      "shape": {
+        "x": 124.05306,
+        "y": 118.8,
+        "w": 15.759183,
+        "h": 8.8897953
+      },
       "plantings": [
-        { "crop": "Purple sprouting broccoli", "family": "brassica", "year": 2026, "status": "growing", "harvestFrom": "2027-02-01", "harvestTo": "2027-04-30", "notes": "Net against pigeons; crops late winter/early spring." },
-        { "crop": "Celeriac", "family": "apiaceae", "year": 2026, "status": "growing", "harvestFrom": "2026-10-01", "harvestTo": "2027-01-31", "notes": "Keep well watered through summer." }
+        {
+          "crop": "Purple sprouting broccoli",
+          "family": "brassica",
+          "year": 2026,
+          "status": "growing",
+          "harvestFrom": "2027-02-01",
+          "harvestTo": "2027-04-30",
+          "notes": "Net against pigeons; crops late winter/early spring."
+        },
+        {
+          "crop": "Celeriac",
+          "family": "apiaceae",
+          "year": 2026,
+          "status": "growing",
+          "harvestFrom": "2026-10-01",
+          "harvestTo": "2027-01-31",
+          "notes": "Keep well watered through summer."
+        }
       ]
     },
     {
@@ -93,7 +196,12 @@
       "name": "Small bed (left, unused)",
       "type": "unused",
       "provisional": true,
-      "shape": { "x": 106.67755, "y": 130.11429, "w": 10.506123, "h": 11.314285 },
+      "shape": {
+        "x": 106.67755,
+        "y": 130.11429,
+        "w": 10.506123,
+        "h": 11.314285
+      },
       "notes": "Small bed on the left, not used for anything yet."
     },
     {
@@ -101,7 +209,12 @@
       "name": "Open ground",
       "type": "unused",
       "provisional": true,
-      "shape": { "x": 119.20408, "y": 129.71021, "w": 6.8693876, "h": 12.122449 },
+      "shape": {
+        "x": 119.20408,
+        "y": 129.71021,
+        "w": 6.8693876,
+        "h": 12.122449
+      },
       "notes": "~2m of unused space."
     },
     {
@@ -109,9 +222,22 @@
       "name": "Raspberry bushes",
       "type": "bushes",
       "provisional": true,
-      "shape": { "x": 128.49796, "y": 129.30612, "w": 11.718368, "h": 13.334693 },
+      "shape": {
+        "x": 128.49796,
+        "y": 129.30612,
+        "w": 11.718368,
+        "h": 13.334693
+      },
       "plantings": [
-        { "crop": "Raspberry", "family": "cane-fruit", "year": 2026, "status": "growing", "harvestFrom": "2026-07-01", "harvestTo": "2026-09-30", "notes": "Note whether summer- or autumn-fruiting — it changes when you prune." }
+        {
+          "crop": "Raspberry",
+          "family": "cane-fruit",
+          "year": 2026,
+          "status": "growing",
+          "harvestFrom": "2026-07-01",
+          "harvestTo": "2026-09-30",
+          "notes": "Note whether summer- or autumn-fruiting — it changes when you prune."
+        }
       ]
     },
     {
@@ -119,10 +245,23 @@
       "name": "Rhubarb sliver (3 plants)",
       "type": "bed",
       "provisional": true,
-      "shape": { "x": 108.69796, "y": 144.25714, "w": 6.8693876, "h": 19.39592 },
+      "shape": {
+        "x": 108.69796,
+        "y": 144.25714,
+        "w": 6.8693876,
+        "h": 19.39592
+      },
       "notes": "~2m sliver on the left.",
       "plantings": [
-        { "crop": "Rhubarb", "family": "rhubarb", "year": 2026, "status": "growing", "harvestFrom": "2026-04-01", "harvestTo": "2026-07-15", "notes": "Three crowns. Stop pulling by mid-summer to let plants recover." }
+        {
+          "crop": "Rhubarb",
+          "family": "rhubarb",
+          "year": 2026,
+          "status": "growing",
+          "harvestFrom": "2026-04-01",
+          "harvestTo": "2026-07-15",
+          "notes": "Three crowns. Stop pulling by mid-summer to let plants recover."
+        }
       ]
     },
     {
@@ -130,10 +269,18 @@
       "name": "Polytunnel (frame only)",
       "type": "structure",
       "provisional": true,
-      "shape": { "x": 117.58775, "y": 144.66122, "w": 24.244898, "h": 18.991835 },
+      "shape": {
+        "x": 117.58775,
+        "y": 144.66122,
+        "w": 24.244898,
+        "h": 18.991835
+      },
       "notes": "Frame is up; no skin/cover on it yet.",
       "tasks": [
-        { "title": "Add the polytunnel cover (skin)", "notes": "Pick a still, warm day — covers go on far more easily when warm." }
+        {
+          "title": "Add the polytunnel cover (skin)",
+          "notes": "Pick a still, warm day — covers go on far more easily when warm."
+        }
       ]
     },
     {
@@ -141,10 +288,21 @@
       "name": "Peach tree & bench area",
       "type": "tree",
       "provisional": true,
-      "shape": { "x": 109.10204, "y": 166.88571, "w": 14.142858, "h": 9.6979599 },
+      "shape": {
+        "x": 109.10204,
+        "y": 166.88571,
+        "w": 14.142858,
+        "h": 9.6979599
+      },
       "notes": "Dying peach tree, with ~2m of unused space. Lower-left earmarked for a bench.",
       "plantings": [
-        { "crop": "Peach", "family": "tree-fruit", "year": 2026, "status": "growing", "notes": "Dying — decide whether to nurse back or replace." }
+        {
+          "crop": "Peach",
+          "family": "tree-fruit",
+          "year": 2026,
+          "status": "growing",
+          "notes": "Dying — decide whether to nurse back or replace."
+        }
       ]
     },
     {
@@ -152,7 +310,12 @@
       "name": "Flower area",
       "type": "unused",
       "provisional": true,
-      "shape": { "x": 126.88163, "y": 165.26939, "w": 16.163265, "h": 9.2938766 },
+      "shape": {
+        "x": 126.88163,
+        "y": 165.26939,
+        "w": 16.163265,
+        "h": 9.2938766
+      },
       "notes": "Lower-right earmarked for nice flowers."
     },
     {
@@ -160,7 +323,12 @@
       "name": "Pond",
       "type": "water",
       "provisional": true,
-      "shape": { "x": 110.31429, "y": 183.45306, "w": 12.930612, "h": 12.930612 },
+      "shape": {
+        "x": 110.31429,
+        "y": 183.45306,
+        "w": 12.930612,
+        "h": 12.930612
+      },
       "notes": "~1.5m² pond at the very bottom-left. Will be shaded as the dwarf cherry (to its south) grows."
     },
     {
@@ -168,12 +336,40 @@
       "name": "Dwarf cherry tree",
       "type": "tree",
       "provisional": true,
-      "shape": { "x": 126.88163, "y": 177.39185, "w": 16.971428, "h": 19.800001 },
+      "shape": {
+        "x": 126.88163,
+        "y": 177.39185,
+        "w": 16.971428,
+        "h": 19.800001
+      },
       "notes": "Just over 2m tall. On the south side, so it should grow to shade the pond.",
       "plantings": [
-        { "crop": "Cherry (dwarf)", "family": "tree-fruit", "year": 2026, "status": "growing", "notes": "~2m+ tall." }
+        {
+          "crop": "Cherry (dwarf)",
+          "family": "tree-fruit",
+          "year": 2026,
+          "status": "growing",
+          "notes": "~2m+ tall."
+        }
       ]
     }
   ],
-  "markers": []
+  "markers": [
+    {
+      "id": "m-rox0nt",
+      "icon": "🥕",
+      "label": "Carrot / root",
+      "x": 130.878,
+      "y": 112.364,
+      "r": 1.53
+    },
+    {
+      "id": "m-pb9p79",
+      "icon": "🌱",
+      "label": "Seedling",
+      "x": 113.937,
+      "y": 112.931,
+      "r": 1
+    }
+  ]
 }
