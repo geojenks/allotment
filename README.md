@@ -29,6 +29,19 @@ calendar — coming next), and per-area (a timeline — coming next).
 - **Edit** — drag an area to move it, drag its corner to resize, **+ Area** to
   create one, edit its name/type/notes.
 
+### Timeline & photos
+
+Select an area to see its **Timeline**: a date scrubber that shows the most recent
+photo on or before the chosen date (with a "*N-day-old photo*" caption), notches
+where photos exist, plus a dated list of photos and notes. Set an area's **Created**
+date in Edit mode to anchor the start of its timeline.
+
+**Add photo** opens your camera or photo library (multi-select). Images are
+compressed in-browser (~1280px) and committed straight to `public/photos/<area>/`
+via your GitHub token — so they need the same token as *Save to website* and go
+live in ~1 minute. **Note** adds a dated text entry (saved locally until you Save
+to website / add a photo).
+
 ### Saving your changes
 
 Edits auto-save to your browser (localStorage), so a refresh never loses them.

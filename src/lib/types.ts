@@ -48,10 +48,23 @@ export interface Planting {
   notes?: string;
 }
 
-export interface TimelineEntry {
-  date: string; // ISO date
-  note: string;
-  photos?: string[]; // paths relative to the site base, e.g. "photos/asparagus-2026-06.jpg"
+export interface AreaPhoto {
+  src: string; // path under public/, e.g. "photos/bed-asparagus/2026-06-28-ph123.jpg"
+  w?: number;
+  h?: number;
+}
+
+/**
+ * A dated entry in an area's timeline. `photo` events carry an image; `note`
+ * and `milestone` events are text (e.g. "made this bed", "resized", "cleared").
+ * The scrubber shows the most recent `photo` on or before the chosen date.
+ */
+export interface AreaEvent {
+  id: string;
+  date: string; // ISO date (YYYY-MM-DD)
+  kind: 'photo' | 'note' | 'milestone';
+  text?: string;
+  photo?: AreaPhoto;
 }
 
 export interface PlotTask {
@@ -94,9 +107,11 @@ export interface Area {
   shape: AreaShape;
   /** Provisional names/positions I guessed from your description — set false once confirmed. */
   provisional?: boolean;
+  created?: string; // ISO date the area was made — start of its timeline
+  removed?: string; // ISO date it was cleared/removed, if it no longer exists
   notes?: string;
   plantings?: Planting[];
-  timeline?: TimelineEntry[];
+  events?: AreaEvent[]; // dated timeline: photos, notes, milestones
   tasks?: PlotTask[];
 }
 
