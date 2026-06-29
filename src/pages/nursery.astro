@@ -36,7 +36,7 @@ import Base from '../layouts/Base.astro';
 <script>
   import seedsData from '../data/seeds.json';
   import areasData from '../data/areas.json';
-  import { getToken, commitFiles, overlayLoad, overlaySave, overlayClear, todayStr } from '../lib/datastore';
+  import { getToken, commitFiles, overlayLoad, overlaySave, overlayClear, todayStr, scopeStamp } from '../lib/datastore';
 
   const KEY = 'allotment:seeds:v1';
   const PATH = 'src/data/seeds.json';
@@ -55,6 +55,7 @@ import Base from '../layouts/Base.astro';
   const barStatus = document.getElementById('bar-status');
   const activeEl = document.getElementById('active');
   const doneEl = document.getElementById('done');
+  const stamp = scopeStamp(activeEl);
   const poDialog = document.getElementById('po-dialog');
   const poForm = document.getElementById('po-form');
 
@@ -73,6 +74,7 @@ import Base from '../layouts/Base.astro';
     doneEl.replaceChildren();
     document.getElementById('done-empty').hidden = done.length > 0;
     for (const s of done) doneEl.append(doneRow(s));
+    stamp(activeEl); stamp(doneEl);
     updateBar();
   }
 
@@ -140,7 +142,7 @@ import Base from '../layouts/Base.astro';
     menu.append(cancel, ok); poForm.append(menu);
 
     poForm.onsubmit = () => { s.stage = 'planted-out'; s.plantedOutDate = date.value || todayStr(); if (dest.value) s.destinationAreaId = dest.value; save(); render(); };
-    poDialog.showModal();
+    stamp(poForm); poDialog.showModal();
   }
 
   document.getElementById('publish').addEventListener('click', async () => {

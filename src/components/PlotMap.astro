@@ -130,6 +130,11 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
 
   // ---- refs --------------------------------------------------------------
   const root = document.getElementById('plot-root');
+  // Stamp Astro's scope attribute onto JS-created nodes so scoped <style> applies.
+  const SCOPE = (() => {
+    const cid = root ? Array.from(root.attributes).map((a) => a.name).find((n) => n.startsWith('data-astro-cid-')) : null;
+    return (el) => { if (cid && el) { el.setAttribute(cid, ''); el.querySelectorAll('*').forEach((n) => n.setAttribute(cid, '')); } return el; };
+  })();
   const mapCard = document.getElementById('map-card');
   const svg = document.getElementById('plot-svg');
   const areaLayer = document.getElementById('area-layer');
@@ -245,6 +250,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     areaNodes.set(area.id, { group: g, rect, badge, badgeText, count, handle, number });
     g.addEventListener('mouseenter', () => g.classList.add('is-hover'));
     g.addEventListener('mouseleave', () => g.classList.remove('is-hover'));
+    SCOPE(g);
   }
   function syncArea(area) {
     const n = areaNodes.get(area.id); if (!n) return; const s = area.shape;
@@ -271,6 +277,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     handle.style.display = 'none';
     g.append(circle, glyph, handle); markerLayer.append(g);
     markerNodes.set(m.id, { group: g, circle, glyph, handle });
+    SCOPE(g);
   }
   function syncMarker(m) {
     const n = markerNodes.get(m.id); if (!n) return;
@@ -298,7 +305,8 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     if (from && to) return `${fmt(from)} – ${fmt(to)}`; if (from) return `from ${fmt(from)}`; if (to) return `until ${fmt(to)}`; return '';
   }
   function emptyInfo(msg) { info.replaceChildren(); const p = document.createElement('p'); p.className = 'info__empty'; p.textContent = msg; info.append(p); }
-  function renderInfo() {
+  function renderInfo() { renderInfoInner(); SCOPE(info); }
+  function renderInfoInner() {
     if (!selected) { emptyInfo(mode === 'edit' ? 'Tap an area to edit or zoom in. Zoom into a bed to drop plant icons.' : "Tap an area on the plan to see what's there."); return; }
     if (selected.kind === 'marker') { const m = markers.find((x) => x.id === selected.id); if (!m) return emptyInfo('Select something.'); return mode === 'edit' ? info.replaceChildren(markerForm(m)) : renderMarkerInfo(m); }
     const a = areas.find((x) => x.id === selected.id); if (!a) return emptyInfo('Select something.');
@@ -654,7 +662,29 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
         const body = document.createElement('div'); body.className = 'timeline__body';
         const dt = document.createElement('span'); dt.className = 'timeline__date'; dt.textContent = fmtDate(e.date); body.append(dt);
         const tx = document.createElement('span'); tx.className = 'timeline__txt'; tx.textContent = e.kind === 'photo' ? '📷 Photo' : (e.text || '');
-        body.append(tx); li.append(body); ul.append(li);
+        body.append(tx); li.append(body);
+
+        const acts = document.createElement('div'); acts.className = 'timeline__acts';
+        if (e.kind === 'photo') {
+          const mv = document.createElement('button'); mv.type = 'button'; mv.className = 'tl-act'; mv.textContent = '⇄ Move';
+          mv.addEventListener('click', () => {
+            const sel = document.createElement('select'); sel.className = 'tl-sel';
+            const d0 = document.createElement('option'); d0.value = ''; d0.textContent = 'Move to bed…'; sel.append(d0);
+            for (const a of areas) { if (a.id === area.id) continue; const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; sel.append(o); }
+            sel.addEventListener('change', () => {
+              const t = areas.find((a) => a.id === sel.value); if (!t) return;
+              const i = area.events.indexOf(e); if (i >= 0) area.events.splice(i, 1);
+              t.events = t.events || []; t.events.push(e);
+              save(); updatePlantCounts(); renderInfo();
+            });
+            acts.replaceChildren(sel); sel.focus();
+          });
+          acts.append(mv);
+        }
+        const del = document.createElement('button'); del.type = 'button'; del.className = 'tl-act'; del.title = 'Delete entry'; del.textContent = '✕';
+        del.addEventListener('click', () => { if (!confirm('Delete this timeline entry?')) return; const i = area.events.indexOf(e); if (i >= 0) area.events.splice(i, 1); save(); updatePlantCounts(); renderInfo(); });
+        acts.append(del); li.append(acts);
+        ul.append(li);
       }
       wrap.append(ul);
     }
@@ -786,10 +816,14 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   .journal__date { font: inherit; font-size: 0.85rem; padding: 0.3rem 0.4rem; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); background: #fff; }
   .journal__status { font-size: 0.78rem; color: var(--green-700); flex-basis: 100%; }
   .timeline { list-style: none; margin: 0.5rem 0 0; padding: 0; border-left: 2px solid var(--line); }
-  .timeline li { position: relative; padding: 0.05rem 0 0.55rem 0.85rem; }
+  .timeline li { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.05rem 0 0.55rem 0.85rem; }
   .timeline__dot { position: absolute; left: -5px; top: 0.4rem; width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); border: 2px solid var(--panel); }
   .timeline__dot.is-photo { background: var(--accent); }
-  .timeline__body { display: flex; flex-direction: column; }
+  .timeline__body { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+  .timeline__acts { display: flex; gap: 0.25rem; flex-shrink: 0; }
+  .tl-act { font: inherit; font-size: 0.72rem; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); border-radius: 6px; padding: 0.12rem 0.4rem; }
+  .tl-act:hover { border-color: var(--green); color: var(--green-700); }
+  .tl-sel { font: inherit; font-size: 0.78rem; padding: 0.15rem 0.3rem; border: 1px solid var(--line-strong); border-radius: 6px; }
   .timeline__date { font-size: 0.72rem; color: var(--muted); }
   .timeline__txt { font-size: 0.9rem; }
 

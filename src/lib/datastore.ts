@@ -60,3 +60,21 @@ export function overlayClear(key: string) {
 
 export const uid = (p: string) => p + Math.random().toString(36).slice(2, 8);
 export const todayStr = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * Astro scopes `<style>` to `data-astro-cid-*` attributes it stamps on elements
+ * at build time — but elements we create in client JS don't get them, so scoped
+ * styles miss. Pass a static element from the page (which DOES carry the attr) to
+ * get a stamper that applies the same attribute to a dynamic subtree.
+ */
+export function scopeStamp(staticEl: Element | null) {
+  const cid = staticEl
+    ? Array.from(staticEl.attributes).map((a) => a.name).find((n) => n.startsWith('data-astro-cid-'))
+    : null;
+  return (root: Element | null) => {
+    if (!cid || !root) return root;
+    root.setAttribute(cid, '');
+    root.querySelectorAll('*').forEach((n) => n.setAttribute(cid, ''));
+    return root;
+  };
+}

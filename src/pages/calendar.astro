@@ -1,349 +1,230 @@
 ---
 import Base from '../layouts/Base.astro';
-import areasData from '../data/areas.json';
-import seedsData from '../data/seeds.json';
-
-// Build a chronological agenda from the plot data: sowings, plant-outs,
-// harvest windows and dated tasks. (Photo-timeline events will join these later.)
-type Ev = {
-  date: string;
-  kind: 'sow' | 'plant' | 'harvest' | 'task';
-  title: string;
-  area: string;
-  detail?: string;
-};
-
-const events: Ev[] = [];
-const undated: { title: string; area: string; detail?: string }[] = [];
-
-const fmtMon = (d: string) =>
-  new Date(d).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-
-for (const area of areasData.areas) {
-  for (const p of area.plantings ?? []) {
-    if (p.sown) events.push({ date: p.sown, kind: 'sow', title: `Sow ${p.crop}`, area: area.name });
-    if (p.planted)
-      events.push({ date: p.planted, kind: 'plant', title: `Plant out ${p.crop}`, area: area.name });
-    if (p.harvestFrom)
-      events.push({
-        date: p.harvestFrom,
-        kind: 'harvest',
-        title: `${p.crop} — harvest`,
-        area: area.name,
-        detail: p.harvestTo ? `through ${fmtMon(p.harvestTo)}` : undefined,
-      });
-  }
-  for (const t of area.tasks ?? []) {
-    const date = t.due ?? t.windowFrom;
-    if (date) events.push({ date, kind: 'task', title: t.title, area: area.name, detail: t.notes });
-    else undated.push({ title: t.title, area: area.name, detail: t.notes });
-  }
-}
-
-// Actual sowings/plant-outs from the seed bank become real calendar events.
-const LOC: Record<string, string> = {
-  greenhouse: 'Greenhouse', polytunnel: 'Polytunnel', nursery: 'Nursery bed',
-  windowsill: 'Windowsill', outdoor: 'Direct outdoors',
-};
-for (const s of seedsData.sowings ?? []) {
-  const name = `${s.crop}${s.variety ? ' — ' + s.variety : ''}`;
-  events.push({ date: s.sownDate, kind: 'sow', title: `Sow ${name}`, area: LOC[s.location] ?? s.location });
-  if (s.plantedOutDate) {
-    const dest = areasData.areas.find((a) => a.id === s.destinationAreaId)?.name;
-    events.push({ date: s.plantedOutDate, kind: 'plant', title: `Plant out ${name}`, area: dest ?? 'the allotment' });
-  }
-}
-
-// Advisory: which packets fall in a sowing window this month.
-const nowMonth = new Date().getMonth() + 1;
-const monthIn = (m: number, w?: { from: number; to: number }) =>
-  w ? (w.from <= w.to ? m >= w.from && m <= w.to : m >= w.from || m <= w.to) : false;
-const sowNow: { name: string; kind: 'indoors' | 'direct' }[] = [];
-for (const s of seedsData.seeds ?? []) {
-  const name = `${s.crop}${s.variety ? ' · ' + s.variety : ''}`;
-  if (monthIn(nowMonth, s.sowIndoors)) sowNow.push({ name, kind: 'indoors' });
-  if (monthIn(nowMonth, s.sowOutdoors)) sowNow.push({ name, kind: 'direct' });
-}
-
-events.sort((a, b) => a.date.localeCompare(b.date));
-
-// Group by calendar month.
-const months: { key: string; label: string; items: Ev[] }[] = [];
-for (const e of events) {
-  const key = e.date.slice(0, 7);
-  let m = months.find((x) => x.key === key);
-  if (!m) {
-    m = {
-      key,
-      label: new Date(e.date + 'T00:00:00').toLocaleDateString('en-GB', {
-        month: 'long',
-        year: 'numeric',
-      }),
-      items: [],
-    };
-    months.push(m);
-  }
-  m.items.push(e);
-}
-
-const todayKey = new Date().toISOString().slice(0, 7);
-const dayNum = (d: string) => new Date(d + 'T00:00:00').getDate();
-const KIND = {
-  sow: { label: 'Sow', mark: '🌱' },
-  plant: { label: 'Plant', mark: '🪴' },
-  harvest: { label: 'Harvest', mark: '🧺' },
-  task: { label: 'Job', mark: '🔧' },
-};
 ---
 
 <Base title="Allotment — Calendar" active="calendar">
   <header class="page-head">
     <p class="eyebrow">What's happening when</p>
     <h1>Calendar</h1>
-    <p>
-      A timeline pulled from what's planted and what's due. It fills out as you add
-      sowing dates, harvest windows and jobs to each area.
-    </p>
+    <p>Sowings, plant-outs, harvests and jobs — colour-coded and filterable by bed or crop.</p>
   </header>
 
-  {
-    sowNow.length > 0 && (
-      <section class="sownow">
-        <h2>Sow this month</h2>
-        <div class="sownow__list">
-          {sowNow.map((s) => (
-            <span class={`sownow__chip sownow__chip--${s.kind}`}>
-              {s.name} <em>{s.kind === 'indoors' ? 'indoors' : 'direct'}</em>
-            </span>
-          ))}
-        </div>
-        <a class="sownow__link" href="../seeds">Open the seed bank →</a>
-      </section>
-    )
-  }
-
-  {
-    months.length === 0 && undated.length === 0 ? (
-      <p class="empty">Nothing dated yet — add harvest windows or tasks to your areas.</p>
-    ) : null
-  }
-
-  <div class="agenda">
-    {
-      months.map((m) => (
-        <section class:list={['month', { 'month--current': m.key === todayKey }]}>
-          <div class="month__label">
-            <h2>{m.label}</h2>
-            {m.key === todayKey && <span class="now">this month</span>}
-          </div>
-          <ul class="events">
-            {m.items.map((e) => (
-              <li class={`event event--${e.kind}`}>
-                <span class="event__day">{dayNum(e.date)}</span>
-                <span class="event__mark" aria-hidden="true">
-                  {KIND[e.kind].mark}
-                </span>
-                <span class="event__body">
-                  <span class="event__title">{e.title}</span>
-                  <span class="event__meta">
-                    {e.area}
-                    {e.detail ? ` · ${e.detail}` : ''}
-                  </span>
-                </span>
-                <span class={`event__kind kind--${e.kind}`}>{KIND[e.kind].label}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))
-    }
-
-    {
-      undated.length > 0 && (
-        <section class="month">
-          <div class="month__label">
-            <h2>Anytime</h2>
-            <span class="now now--muted">no date set</span>
-          </div>
-          <ul class="events">
-            {undated.map((e) => (
-              <li class="event event--task">
-                <span class="event__day">—</span>
-                <span class="event__mark" aria-hidden="true">
-                  🔧
-                </span>
-                <span class="event__body">
-                  <span class="event__title">{e.title}</span>
-                  <span class="event__meta">
-                    {e.area}
-                    {e.detail ? ` · ${e.detail}` : ''}
-                  </span>
-                </span>
-                <span class="event__kind kind--task">Job</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )
-    }
+  <div id="sownow" class="sownow" hidden>
+    <strong>Sow this month:</strong> <span id="sownow-list"></span>
+    <a href="../seeds">seed bank →</a>
   </div>
+
+  <div class="cal-bar">
+    <div class="nav">
+      <button id="prev" class="navbtn" type="button" aria-label="Previous month">‹</button>
+      <h2 id="month-label"></h2>
+      <button id="next" class="navbtn" type="button" aria-label="Next month">›</button>
+      <button id="today" class="ctl" type="button">Today</button>
+    </div>
+    <div class="filters">
+      <select id="f-area" class="filt" aria-label="Filter by bed"></select>
+      <select id="f-crop" class="filt" aria-label="Filter by crop"></select>
+    </div>
+  </div>
+
+  <div id="legend" class="legend2"></div>
+
+  <div class="cal-wrap">
+    <div class="dow" id="dow"></div>
+    <div id="grid" class="grid"></div>
+  </div>
+
+  <div id="month-list" class="month-list"></div>
 </Base>
 
-<style>
-  .empty {
-    color: var(--muted);
+<script>
+  import areasData from '../data/areas.json';
+  import seedsData from '../data/seeds.json';
+  import { scopeStamp } from '../lib/datastore';
+
+  const stamp = scopeStamp(document.getElementById('grid'));
+
+  const CATS = {
+    sow: { label: 'Sow', color: '#5f8a36' },
+    plant: { label: 'Plant out', color: '#2f7d5a' },
+    harvest: { label: 'Harvest', color: '#c2622d' },
+    prune: { label: 'Prune', color: '#8a5fb0' },
+    water: { label: 'Water', color: '#3f86ad' },
+    build: { label: 'Build', color: '#9a7b4f' },
+    job: { label: 'Job', color: '#64748b' },
+  };
+  const LOC = { greenhouse: 'Greenhouse', polytunnel: 'Polytunnel', nursery: 'Nursery bed', windowsill: 'Windowsill', outdoor: 'Direct outdoors' };
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const areaName = (id) => areasData.areas.find((a) => a.id === id)?.name;
+
+  // ---- build events ------------------------------------------------------
+  const events = [];
+  const push = (e) => events.push(e);
+  for (const area of areasData.areas) {
+    for (const p of area.plantings ?? []) {
+      if (p.sown) push({ date: p.sown, cat: 'sow', title: p.crop, areaId: area.id, area: area.name, crop: p.crop });
+      if (p.planted) push({ date: p.planted, cat: 'plant', title: p.crop, areaId: area.id, area: area.name, crop: p.crop });
+      if (p.harvestFrom) push({ date: p.harvestFrom, cat: 'harvest', title: p.crop, areaId: area.id, area: area.name, crop: p.crop, detail: p.harvestTo ? 'until ' + p.harvestTo : '' });
+    }
+    for (const t of area.tasks ?? []) {
+      const date = t.due ?? t.windowFrom;
+      if (date) push({ date, cat: t.category || 'job', title: t.title, areaId: area.id, area: area.name, crop: '', detail: t.notes });
+    }
   }
-  .sownow {
-    background: var(--green-100);
-    border: 1px solid color-mix(in srgb, var(--green) 22%, white);
-    border-radius: var(--radius);
-    padding: 0.9rem 1.1rem;
-    margin-bottom: 1.6rem;
-  }
-  .sownow h2 {
-    font-size: 1.05rem;
-    margin-bottom: 0.5rem;
-  }
-  .sownow__list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-bottom: 0.5rem;
-  }
-  .sownow__chip {
-    font-size: 0.84rem;
-    border-radius: 999px;
-    padding: 0.22rem 0.65rem;
-    background: var(--panel);
-    border: 1px solid var(--line-strong);
-  }
-  .sownow__chip em {
-    font-style: normal;
-    font-weight: 700;
-    color: var(--green-700);
-  }
-  .sownow__chip--direct em {
-    color: var(--accent);
-  }
-  .sownow__link {
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-decoration: none;
-  }
-  .agenda {
-    display: flex;
-    flex-direction: column;
-    gap: 1.6rem;
-  }
-  .month {
-    display: grid;
-    grid-template-columns: 160px 1fr;
-    gap: 1rem;
-    align-items: start;
-  }
-  .month__label {
-    position: sticky;
-    top: calc(var(--header-h) + 12px);
-  }
-  .month__label h2 {
-    font-size: 1.15rem;
-  }
-  .now {
-    display: inline-block;
-    margin-top: 0.3rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--accent);
-  }
-  .now--muted {
-    color: var(--muted);
-  }
-  .month--current .month__label h2 {
-    color: var(--green-700);
+  for (const s of seedsData.sowings ?? []) {
+    const name = `${s.crop}${s.variety ? ' · ' + s.variety : ''}`;
+    push({ date: s.sownDate, cat: 'sow', title: name, areaId: '', area: LOC[s.location] || s.location, crop: s.crop });
+    if (s.plantedOutDate) push({ date: s.plantedOutDate, cat: 'plant', title: name, areaId: s.destinationAreaId || '', area: s.destinationAreaId ? areaName(s.destinationAreaId) || 'allotment' : 'allotment', crop: s.crop });
   }
 
-  .events {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+  const crops = [...new Set(events.map((e) => e.crop).filter(Boolean))].sort();
+
+  // ---- state -------------------------------------------------------------
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let view = new Date(today.getFullYear(), today.getMonth(), 1);
+  const active = new Set(Object.keys(CATS));
+  let fArea = '', fCrop = '';
+  const visible = (e) => active.has(e.cat) && (!fArea || e.areaId === fArea) && (!fCrop || e.crop === fCrop);
+
+  // ---- chrome ------------------------------------------------------------
+  const dowEl = document.getElementById('dow');
+  for (const d of DOW) { const s = document.createElement('span'); s.textContent = d; dowEl.append(s); }
+  stamp(dowEl);
+
+  const legend = document.getElementById('legend');
+  for (const [key, c] of Object.entries(CATS)) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'lgd is-on'; b.dataset.cat = key;
+    b.style.setProperty('--c', c.color);
+    const dot = document.createElement('span'); dot.className = 'lgd__dot';
+    b.append(dot, document.createTextNode(c.label));
+    b.addEventListener('click', () => { if (active.has(key)) active.delete(key); else active.add(key); b.classList.toggle('is-on', active.has(key)); render(); });
+    legend.append(b);
   }
-  .event {
-    display: grid;
-    grid-template-columns: 2ch 1.4rem 1fr auto;
-    align-items: center;
-    gap: 0.75rem;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    padding: 0.7rem 0.9rem;
-    box-shadow: var(--shadow-sm);
-    transition: border-color 0.16s ease;
+  stamp(legend);
+
+  const fArs = document.getElementById('f-area');
+  fArs.append(new Option('All beds', ''));
+  for (const a of areasData.areas) fArs.append(new Option(a.name, a.id));
+  fArs.addEventListener('change', () => { fArea = fArs.value; render(); });
+  const fCrs = document.getElementById('f-crop');
+  fCrs.append(new Option('All crops', ''));
+  for (const c of crops) fCrs.append(new Option(c, c));
+  fCrs.addEventListener('change', () => { fCrop = fCrs.value; render(); });
+
+  document.getElementById('prev').addEventListener('click', () => { view.setMonth(view.getMonth() - 1); render(); });
+  document.getElementById('next').addEventListener('click', () => { view.setMonth(view.getMonth() + 1); render(); });
+  document.getElementById('today').addEventListener('click', () => { view = new Date(today.getFullYear(), today.getMonth(), 1); render(); });
+
+  // sow-now strip
+  const nowMonth = today.getMonth() + 1;
+  const monthIn = (m, w) => (w ? (w.from <= w.to ? m >= w.from && m <= w.to : m >= w.from || m <= w.to) : false);
+  const sowNow = [];
+  for (const s of seedsData.seeds ?? []) {
+    if (monthIn(nowMonth, s.sowIndoors)) sowNow.push(`${s.crop} (indoors)`);
+    if (monthIn(nowMonth, s.sowOutdoors)) sowNow.push(`${s.crop} (direct)`);
   }
-  .event:hover {
-    border-color: var(--line-strong);
+  if (sowNow.length) { document.getElementById('sownow').hidden = false; document.getElementById('sownow-list').textContent = sowNow.join(', ') + ' · '; }
+
+  // ---- render ------------------------------------------------------------
+  const grid = document.getElementById('grid');
+  const monthList = document.getElementById('month-list');
+  const iso = (d) => d.toISOString().slice(0, 10);
+
+  function render() {
+    const y = view.getFullYear(), m = view.getMonth();
+    document.getElementById('month-label').textContent = `${MONTHS[m]} ${y}`;
+
+    const byDay = {};
+    for (const e of events) {
+      if (!visible(e)) continue;
+      const d = new Date(e.date + 'T00:00:00');
+      if (d.getFullYear() === y && d.getMonth() === m) (byDay[d.getDate()] ||= []).push(e);
+    }
+
+    const startDow = (new Date(y, m, 1).getDay() + 6) % 7; // Monday = 0
+    const days = new Date(y, m + 1, 0).getDate();
+    grid.replaceChildren();
+    for (let i = 0; i < startDow; i++) { const c = document.createElement('div'); c.className = 'cell cell--pad'; grid.append(c); }
+    for (let day = 1; day <= days; day++) {
+      const cell = document.createElement('div'); cell.className = 'cell';
+      const date = new Date(y, m, day);
+      if (date.getTime() === today.getTime()) cell.classList.add('is-today');
+      const num = document.createElement('span'); num.className = 'cell__num'; num.textContent = String(day); cell.append(num);
+      for (const e of byDay[day] || []) {
+        const chip = document.createElement('span'); chip.className = 'chip'; chip.style.setProperty('--c', CATS[e.cat].color);
+        chip.textContent = e.title;
+        chip.title = `${CATS[e.cat].label}: ${e.title}${e.area ? ' — ' + e.area : ''}`;
+        cell.append(chip);
+      }
+      grid.append(cell);
+    }
+
+    // compact list of this month's events
+    const items = Object.entries(byDay).sort((a, b) => +a[0] - +b[0]);
+    monthList.replaceChildren();
+    if (!items.length) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Nothing this month with the current filters.'; monthList.append(p); }
+    else for (const [day, evs] of items) for (const e of evs) {
+      const row = document.createElement('div'); row.className = 'mrow';
+      const dd = document.createElement('span'); dd.className = 'mrow__day'; dd.textContent = `${day} ${MONTHS[m].slice(0, 3)}`;
+      const tag = document.createElement('span'); tag.className = 'mrow__tag'; tag.style.setProperty('--c', CATS[e.cat].color); tag.textContent = CATS[e.cat].label;
+      const tt = document.createElement('span'); tt.className = 'mrow__title'; tt.textContent = e.title;
+      const ar = document.createElement('span'); ar.className = 'mrow__area muted'; ar.textContent = e.area || '';
+      row.append(dd, tag, tt, ar); monthList.append(row);
+    }
+    stamp(grid); stamp(monthList);
   }
-  .event__day {
-    font-variant-numeric: tabular-nums;
-    font-weight: 700;
-    color: var(--muted);
-    text-align: right;
-  }
-  .event__mark {
-    font-size: 1rem;
-  }
-  .event__body {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-  .event__title {
-    font-weight: 600;
-  }
-  .event__meta {
-    font-size: 0.82rem;
-    color: var(--muted);
-  }
-  .event__kind {
-    font-size: 0.68rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0.16rem 0.5rem;
-    border-radius: 999px;
-    white-space: nowrap;
-  }
-  .kind--harvest {
-    color: var(--accent);
-    background: var(--accent-soft);
-  }
-  .kind--sow,
-  .kind--plant {
-    color: var(--green-700);
-    background: var(--green-100);
-  }
-  .kind--task {
-    color: var(--ink-soft);
-    background: var(--paper-2);
-  }
+
+  render();
+</script>
+
+<style>
+  .sownow { background: var(--green-100); border: 1px solid color-mix(in srgb, var(--green) 22%, white); border-radius: var(--radius-sm); padding: 0.55rem 0.9rem; margin-bottom: 1.1rem; font-size: 0.9rem; }
+  .sownow a { font-weight: 600; text-decoration: none; }
+
+  .cal-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.8rem; margin-bottom: 0.9rem; }
+  .nav { display: flex; align-items: center; gap: 0.6rem; }
+  .nav h2 { font-size: 1.3rem; min-width: 9.5rem; text-align: center; }
+  .navbtn { font: inherit; font-size: 1.3rem; line-height: 1; cursor: pointer; width: 2rem; height: 2rem; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); }
+  .navbtn:hover { border-color: var(--green); color: var(--green-700); }
+  .ctl { font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); padding: 0.35rem 0.7rem; border-radius: 8px; }
+  .filters { display: flex; gap: 0.5rem; }
+  .filt { font: inherit; font-size: 0.9rem; padding: 0.35rem 0.5rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink); }
+
+  .legend2 { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.9rem; }
+  .lgd { display: inline-flex; align-items: center; gap: 0.35rem; font: inherit; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); border-radius: 999px; padding: 0.2rem 0.6rem; }
+  .lgd__dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--c); }
+  .lgd.is-on { color: var(--ink); border-color: color-mix(in srgb, var(--c) 55%, white); background: color-mix(in srgb, var(--c) 10%, white); }
+  .lgd:not(.is-on) { opacity: 0.5; }
+  .lgd:not(.is-on) .lgd__dot { background: var(--line-strong); }
+
+  .cal-wrap { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--panel); box-shadow: var(--shadow-sm); }
+  .dow { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--paper-2); border-bottom: 1px solid var(--line); }
+  .dow span { padding: 0.5rem; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); text-align: left; }
+  .grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(96px, auto); }
+  .cell { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0.3rem; display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+  .cell:nth-child(7n) { border-right: 0; }
+  .cell--pad { background: color-mix(in srgb, var(--paper-2) 60%, white); }
+  .cell__num { font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+  .is-today { background: color-mix(in srgb, var(--green) 8%, white); }
+  .is-today .cell__num { color: var(--green-700); font-weight: 800; }
+  .chip { font-size: 0.72rem; line-height: 1.2; color: #fff; background: var(--c); border-radius: 5px; padding: 0.1rem 0.35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default; }
+
+  .month-list { margin-top: 1.3rem; display: flex; flex-direction: column; gap: 0.35rem; }
+  .mrow { display: grid; grid-template-columns: 4.5rem 5.5rem 1fr auto; align-items: center; gap: 0.6rem; padding: 0.4rem 0.2rem; border-bottom: 1px solid var(--line); font-size: 0.92rem; }
+  .mrow__day { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+  .mrow__tag { justify-self: start; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #fff; background: var(--c); border-radius: 999px; padding: 0.1rem 0.5rem; }
+  .mrow__title { font-weight: 600; }
+  .mrow__area { font-size: 0.82rem; }
+  .muted { color: var(--muted); }
 
   @media (max-width: 680px) {
-    .month {
-      grid-template-columns: 1fr;
-      gap: 0.5rem;
-    }
-    .month__label {
-      position: static;
-    }
-    .event {
-      grid-template-columns: 2ch 1.4rem 1fr;
-    }
-    .event__kind {
-      display: none;
-    }
+    .cell { min-height: 64px; }
+    .grid { grid-auto-rows: minmax(64px, auto); }
+    .chip { font-size: 0.64rem; }
+    .dow span { padding: 0.4rem 0.3rem; font-size: 0.62rem; }
+    .mrow { grid-template-columns: 3.5rem 1fr; row-gap: 0.1rem; }
+    .mrow__tag, .mrow__area { display: none; }
+    .nav h2 { min-width: 7rem; font-size: 1.1rem; }
   }
 </style>

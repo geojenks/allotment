@@ -41,7 +41,7 @@ const count = seedsData.seeds.length;
 <script>
   import seedsData from '../data/seeds.json';
   import areasData from '../data/areas.json';
-  import { getToken, commitFiles, overlayLoad, overlaySave, overlayClear, uid, todayStr } from '../lib/datastore';
+  import { getToken, commitFiles, overlayLoad, overlaySave, overlayClear, uid, todayStr, scopeStamp } from '../lib/datastore';
 
   const KEY = 'allotment:seeds:v1';
   const PATH = 'src/data/seeds.json';
@@ -63,6 +63,7 @@ const count = seedsData.seeds.length;
   const dirty = () => JSON.stringify(data) !== baseline;
 
   const grid = document.getElementById('seed-grid');
+  const stamp = scopeStamp(grid);
   const bar = document.getElementById('bar');
   const barStatus = document.getElementById('bar-status');
   const seedDialog = document.getElementById('seed-dialog');
@@ -93,6 +94,7 @@ const count = seedsData.seeds.length;
     for (const s of data.seeds) grid.append(seedCard(s));
     document.getElementById('seed-count').textContent = `${data.seeds.length} packet${data.seeds.length === 1 ? '' : 's'}`;
     renderSowNow();
+    stamp(grid);
     updateBar();
   }
 
@@ -146,6 +148,7 @@ const count = seedsData.seeds.length;
       chip.addEventListener('click', () => openSow(it.s, it.kind === 'direct' ? 'outdoor' : 'greenhouse'));
       list.append(chip);
     }
+    stamp(wrap);
   }
 
   // ---- forms -------------------------------------------------------------
@@ -205,7 +208,7 @@ const count = seedsData.seeds.length;
       if (seed) Object.assign(seed, rec, { id: seed.id }); else data.seeds.push(rec);
       save(); render();
     };
-    seedDialog.showModal();
+    stamp(seedForm); seedDialog.showModal();
   }
 
   function openSow(seed, presetLoc) {
@@ -236,7 +239,7 @@ const count = seedsData.seeds.length;
       barStatus.textContent = sowing.underGlass ? 'Added to the Nursery →' : 'Logged on the Calendar →';
       setTimeout(() => (barStatus.textContent = ''), 4000);
     };
-    sowDialog.showModal();
+    stamp(sowForm); sowDialog.showModal();
   }
 
   // ---- publish bar -------------------------------------------------------

@@ -67,8 +67,12 @@ export interface AreaEvent {
   photo?: AreaPhoto;
 }
 
+/** Category of a dated job — drives the colour on the calendar. */
+export type JobCategory = 'sow' | 'plant' | 'harvest' | 'prune' | 'water' | 'build' | 'job';
+
 export interface PlotTask {
   title: string; // e.g. "Net the PSB against pigeons"
+  category?: JobCategory; // defaults to 'job'
   due?: string; // ISO date (a specific day)
   windowFrom?: string; // ISO date — or a window instead of a single day
   windowTo?: string;
