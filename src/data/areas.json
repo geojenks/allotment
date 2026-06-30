@@ -101,7 +101,8 @@
         "w": 16.567347,
         "h": 9.2938766
       },
-      "notes": "One of the two ~2.5m wide beds. Not well used yet."
+      "notes": "One of the two ~2.5m wide beds. Not well used yet.",
+      "events": []
     },
     {
       "id": "bed-1-right",
@@ -137,6 +138,15 @@
         "h": 7.6775508
       },
       "notes": "Entirely occupied. Grown from seed, ~20cm tall.",
+      "plantings": [
+        {
+          "crop": "Asparagus",
+          "family": "asparagus",
+          "year": 2026,
+          "status": "growing",
+          "notes": "From seed, ~20cm tall. Perennial — don't rotate; no real harvest until established (~year 3)."
+        }
+      ],
       "events": [
         {
           "id": "ph-3pzre9",
@@ -147,15 +157,6 @@
             "w": 720,
             "h": 1280
           }
-        }
-      ],
-      "plantings": [
-        {
-          "crop": "Asparagus",
-          "family": "asparagus",
-          "year": 2026,
-          "status": "growing",
-          "notes": "From seed, ~20cm tall. Perennial — don't rotate; no real harvest until established (~year 3)."
         }
       ]
     },
@@ -279,8 +280,6 @@
       "tasks": [
         {
           "title": "Add the polytunnel cover (skin)",
-          "category": "build",
-          "due": "2026-07-15",
           "notes": "Pick a still, warm day — covers go on far more easily when warm."
         }
       ]
