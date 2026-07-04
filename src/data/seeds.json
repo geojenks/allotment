@@ -6,8 +6,14 @@
       "crop": "Tomato",
       "variety": "Gardener's Delight",
       "family": "solanaceae",
-      "sowIndoors": { "from": 2, "to": 4 },
-      "harvest": { "from": 7, "to": 10 },
+      "sowIndoors": {
+        "from": 2,
+        "to": 4
+      },
+      "harvest": {
+        "from": 7,
+        "to": 10
+      },
       "spacing": "45cm",
       "depth": "5mm",
       "inStock": true,
@@ -18,9 +24,18 @@
       "crop": "Cabbage",
       "variety": "Greyhound",
       "family": "brassica",
-      "sowIndoors": { "from": 3, "to": 4 },
-      "sowOutdoors": { "from": 4, "to": 6 },
-      "harvest": { "from": 6, "to": 9 },
+      "sowIndoors": {
+        "from": 3,
+        "to": 4
+      },
+      "sowOutdoors": {
+        "from": 4,
+        "to": 6
+      },
+      "harvest": {
+        "from": 6,
+        "to": 9
+      },
       "spacing": "30cm",
       "depth": "1.5cm",
       "inStock": true,
@@ -31,8 +46,14 @@
       "crop": "Carrot",
       "variety": "Nantes 2",
       "family": "apiaceae",
-      "sowOutdoors": { "from": 4, "to": 7 },
-      "harvest": { "from": 7, "to": 10 },
+      "sowOutdoors": {
+        "from": 4,
+        "to": 7
+      },
+      "harvest": {
+        "from": 7,
+        "to": 10
+      },
       "spacing": "thin to 5cm",
       "depth": "1cm",
       "inStock": true,
@@ -43,9 +64,18 @@
       "crop": "French bean",
       "variety": "Cobra",
       "family": "legume",
-      "sowIndoors": { "from": 5, "to": 5 },
-      "sowOutdoors": { "from": 6, "to": 6 },
-      "harvest": { "from": 8, "to": 9 },
+      "sowIndoors": {
+        "from": 5,
+        "to": 5
+      },
+      "sowOutdoors": {
+        "from": 6,
+        "to": 6
+      },
+      "harvest": {
+        "from": 8,
+        "to": 9
+      },
       "spacing": "20cm",
       "depth": "5cm",
       "inStock": true,
@@ -56,8 +86,14 @@
       "crop": "Basil",
       "variety": "Sweet Genovese",
       "family": "other",
-      "sowIndoors": { "from": 3, "to": 5 },
-      "harvest": { "from": 6, "to": 9 },
+      "sowIndoors": {
+        "from": 3,
+        "to": 5
+      },
+      "harvest": {
+        "from": 6,
+        "to": 9
+      },
       "depth": "surface",
       "inStock": true,
       "notes": "Stays in the home greenhouse. Keep warm; pinch tips to bush out."
@@ -88,6 +124,17 @@
       "underGlass": true,
       "stage": "potted-on",
       "notes": "Staying in the home greenhouse to fruit."
+    },
+    {
+      "id": "sow-9tg1sm",
+      "seedId": "tomato-gardeners-delight",
+      "crop": "Tomato",
+      "variety": "Gardener's Delight",
+      "family": "solanaceae",
+      "sownDate": "2026-03-18",
+      "location": "greenhouse",
+      "underGlass": true,
+      "stage": "sown"
     }
   ]
 }
