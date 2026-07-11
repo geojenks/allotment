@@ -70,6 +70,24 @@ export interface AreaEvent {
 /** Category of a dated job — drives the colour on the calendar. */
 export type JobCategory = 'sow' | 'plant' | 'harvest' | 'prune' | 'water' | 'build' | 'job';
 
+/** Categories for diary entries logged from the calendar. */
+export type LogCategory = 'water' | 'weed-light' | 'weed-heavy' | 'project' | 'harvest' | 'job';
+
+/** A diary entry: something you DID on a given day (watered, weeded, project work). */
+export interface LogEntry {
+  id: string;
+  date: string; // ISO date
+  category: LogCategory;
+  title?: string; // e.g. "Skinned the polytunnel" — defaults to the category label
+  areaId?: string; // optional bed it applies to
+  notes?: string;
+}
+
+/** The whole diary file: src/data/log.json. */
+export interface LogData {
+  entries: LogEntry[];
+}
+
 export interface PlotTask {
   title: string; // e.g. "Net the PSB against pigeons"
   category?: JobCategory; // defaults to 'job'

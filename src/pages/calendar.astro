@@ -6,8 +6,15 @@ import Base from '../layouts/Base.astro';
   <header class="page-head">
     <p class="eyebrow">What's happening when</p>
     <h1>Calendar</h1>
-    <p>Sowings, plant-outs, harvests and jobs — colour-coded and filterable by bed or crop.</p>
+    <p>Sowings, plant-outs, harvests, jobs and rain — tap a day to see everything or log what you did (watering, weeding, project work).</p>
   </header>
+
+  <div id="bar" class="savebar" hidden>
+    <span class="savebar__label">Unsaved diary entries</span>
+    <button id="publish" class="ctl ctl--primary" type="button">Save to website</button>
+    <button id="discard" class="ctl ctl--ghost" type="button">Discard</button>
+    <span id="bar-status" class="savebar__status"></span>
+  </div>
 
   <div id="sownow" class="sownow" hidden>
     <strong>Sow this month:</strong> <span id="sownow-list"></span>
@@ -37,48 +44,72 @@ import Base from '../layouts/Base.astro';
   </div>
 
   <div id="month-list" class="month-list"></div>
+
+  <dialog id="day-dialog" class="dialog"><div id="day-body" class="day-body"></div></dialog>
 </Base>
 
 <script>
   import areasData from '../data/areas.json';
   import seedsData from '../data/seeds.json';
-  import { scopeStamp, PLOT_LOCATION } from '../lib/datastore';
+  import logData from '../data/log.json';
+  import { scopeStamp, PLOT_LOCATION, getToken, commitFiles, overlayLoad, overlaySave, overlayClear, uid, todayStr } from '../lib/datastore';
 
   const stamp = scopeStamp(document.getElementById('grid'));
 
   const CATS = {
-    sow: { label: 'Sow', color: '#5f8a36' },
-    plant: { label: 'Plant out', color: '#2f7d5a' },
-    harvest: { label: 'Harvest', color: '#c2622d' },
-    prune: { label: 'Prune', color: '#8a5fb0' },
-    water: { label: 'Water', color: '#3f86ad' },
-    build: { label: 'Build', color: '#9a7b4f' },
-    job: { label: 'Job', color: '#64748b' },
+    sow: { label: 'Sow', color: '#5f8a36', emoji: '🌱' },
+    plant: { label: 'Plant out', color: '#2f7d5a', emoji: '🪴' },
+    harvest: { label: 'Harvest', color: '#c2622d', emoji: '🧺' },
+    prune: { label: 'Prune', color: '#8a5fb0', emoji: '✂️' },
+    water: { label: 'Watered', color: '#3f86ad', emoji: '🚿' },
+    'weed-light': { label: 'Light weeding', color: '#8bb04f', emoji: '🌿' },
+    'weed-heavy': { label: 'Heavy weeding', color: '#55702c', emoji: '🌿' },
+    project: { label: 'Project work', color: '#9a7b4f', emoji: '🔨' },
+    build: { label: 'Build', color: '#9a7b4f', emoji: '🧱' },
+    job: { label: 'Job', color: '#64748b', emoji: '🔧' },
   };
+  /** Categories you can log yourself from the day popup. */
+  const LOG_CATS = ['water', 'weed-light', 'weed-heavy', 'project', 'harvest', 'job'];
+
+  const LOG_KEY = 'allotment:log:v1';
+  const LOG_PATH = 'src/data/log.json';
+  let log = overlayLoad(LOG_KEY, logData);
+  let logBaseline = JSON.stringify(logData);
+  const logDirty = () => JSON.stringify(log) !== logBaseline;
+  const bar = document.getElementById('bar');
+  const barStatus = document.getElementById('bar-status');
+  const saveLog = () => { overlaySave(LOG_KEY, log); bar.hidden = !logDirty(); };
   const LOC = { greenhouse: 'Greenhouse', polytunnel: 'Polytunnel', nursery: 'Nursery bed', windowsill: 'Windowsill', outdoor: 'Direct outdoors' };
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const areaName = (id) => areasData.areas.find((a) => a.id === id)?.name;
 
   // ---- build events ------------------------------------------------------
-  const events = [];
-  const push = (e) => events.push(e);
-  for (const area of areasData.areas) {
-    for (const p of area.plantings ?? []) {
-      if (p.sown) push({ date: p.sown, cat: 'sow', title: p.crop, areaId: area.id, area: area.name, crop: p.crop });
-      if (p.planted) push({ date: p.planted, cat: 'plant', title: p.crop, areaId: area.id, area: area.name, crop: p.crop });
-      if (p.harvestFrom) push({ date: p.harvestFrom, cat: 'harvest', title: p.crop, areaId: area.id, area: area.name, crop: p.crop, detail: p.harvestTo ? 'until ' + p.harvestTo : '' });
+  let events = [];
+  function buildEvents() {
+    events = [];
+    const push = (e) => events.push(e);
+    for (const area of areasData.areas) {
+      for (const p of area.plantings ?? []) {
+        if (p.sown) push({ date: p.sown, cat: 'sow', title: p.crop, areaId: area.id, area: area.name, crop: p.crop });
+        if (p.planted) push({ date: p.planted, cat: 'plant', title: p.crop, areaId: area.id, area: area.name, crop: p.crop });
+        if (p.harvestFrom) push({ date: p.harvestFrom, cat: 'harvest', title: p.crop, areaId: area.id, area: area.name, crop: p.crop, detail: p.harvestTo ? 'until ' + p.harvestTo : '' });
+      }
+      for (const t of area.tasks ?? []) {
+        const date = t.due ?? t.windowFrom;
+        if (date) push({ date, cat: t.category || 'job', title: t.title, areaId: area.id, area: area.name, crop: '', detail: t.notes });
+      }
     }
-    for (const t of area.tasks ?? []) {
-      const date = t.due ?? t.windowFrom;
-      if (date) push({ date, cat: t.category || 'job', title: t.title, areaId: area.id, area: area.name, crop: '', detail: t.notes });
+    for (const s of seedsData.sowings ?? []) {
+      const name = `${s.crop}${s.variety ? ' · ' + s.variety : ''}`;
+      push({ date: s.sownDate, cat: 'sow', title: name, areaId: '', area: LOC[s.location] || s.location, crop: s.crop });
+      if (s.plantedOutDate) push({ date: s.plantedOutDate, cat: 'plant', title: name, areaId: s.destinationAreaId || '', area: s.destinationAreaId ? areaName(s.destinationAreaId) || 'allotment' : 'allotment', crop: s.crop });
+    }
+    for (const en of log.entries ?? []) {
+      push({ date: en.date, cat: en.category, title: en.title || (CATS[en.category] || CATS.job).label, areaId: en.areaId || '', area: en.areaId ? areaName(en.areaId) || '' : '', crop: '', detail: en.notes, logId: en.id });
     }
   }
-  for (const s of seedsData.sowings ?? []) {
-    const name = `${s.crop}${s.variety ? ' · ' + s.variety : ''}`;
-    push({ date: s.sownDate, cat: 'sow', title: name, areaId: '', area: LOC[s.location] || s.location, crop: s.crop });
-    if (s.plantedOutDate) push({ date: s.plantedOutDate, cat: 'plant', title: name, areaId: s.destinationAreaId || '', area: s.destinationAreaId ? areaName(s.destinationAreaId) || 'allotment' : 'allotment', crop: s.crop });
-  }
+  buildEvents();
 
   const crops = [...new Set(events.map((e) => e.crop).filter(Boolean))].sort();
 
@@ -249,11 +280,13 @@ import Base from '../layouts/Base.astro';
         if (!wx.fc && wx.mm >= RAIN_PROPER) cell.classList.add('is-wet');
       }
       for (const e of byDay[day] || []) {
-        const chip = document.createElement('span'); chip.className = 'chip'; chip.style.setProperty('--c', CATS[e.cat].color);
-        chip.textContent = e.title;
-        chip.title = `${CATS[e.cat].label}: ${e.title}${e.area ? ' — ' + e.area : ''}`;
+        const c = CATS[e.cat] || CATS.job;
+        const chip = document.createElement('span'); chip.className = 'chip'; chip.style.setProperty('--c', c.color);
+        chip.textContent = (c.emoji ? c.emoji + ' ' : '') + e.title;
+        chip.title = `${c.label}: ${e.title}${e.area ? ' — ' + e.area : ''}`;
         cell.append(chip);
       }
+      cell.addEventListener('click', () => openDay(y, m, day));
       grid.append(cell);
     }
 
@@ -272,6 +305,85 @@ import Base from '../layouts/Base.astro';
     stamp(grid); stamp(monthList);
   }
 
+  // ---- day popup: everything on one day, full text + add diary entries ----
+  const dayDialog = document.getElementById('day-dialog');
+  const dayBody = document.getElementById('day-body');
+  function openDay(y, m, day) {
+    const isoDay = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    dayBody.replaceChildren();
+    const h = document.createElement('h3');
+    h.textContent = new Date(y, m, day).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    dayBody.append(h);
+
+    const wx = rain.get(isoDay);
+    if (wx && (wx.mm >= RAIN_MIN || (wx.prob ?? 0) >= 20)) {
+      const w = document.createElement('p'); w.className = 'day-wx';
+      w.textContent = wx.fc
+        ? `💧 Rain forecast: ${wx.prob != null ? wx.prob + '% chance' : ''}${wx.mm >= RAIN_MIN ? `, ~${fmtMM(wx.mm)}` : ''}`
+        : `💧 It rained: ${fmtMM(wx.mm)}`;
+      dayBody.append(w);
+    }
+
+    const todays = events.filter((e) => e.date === isoDay);
+    if (!todays.length) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Nothing on this day yet.'; dayBody.append(p); }
+    for (const e of todays) {
+      const c = CATS[e.cat] || CATS.job;
+      const row = document.createElement('div'); row.className = 'day-ev';
+      const tag = document.createElement('span'); tag.className = 'day-ev__tag'; tag.style.setProperty('--c', c.color); tag.textContent = `${c.emoji || ''} ${c.label}`.trim();
+      const body = document.createElement('div'); body.className = 'day-ev__body';
+      const tt = document.createElement('strong'); tt.textContent = e.title; body.append(tt);
+      if (e.area) { const ar = document.createElement('span'); ar.className = 'muted small'; ar.textContent = e.area; body.append(ar); }
+      if (e.detail) { const d = document.createElement('span'); d.className = 'small'; d.textContent = e.detail; body.append(d); }
+      row.append(tag, body);
+      if (e.logId) {
+        const del = document.createElement('button'); del.type = 'button'; del.className = 'day-del'; del.textContent = '✕'; del.title = 'Delete this diary entry';
+        del.addEventListener('click', () => { log.entries = log.entries.filter((x) => x.id !== e.logId); saveLog(); buildEvents(); render(); openDay(y, m, day); });
+        row.append(del);
+      }
+      dayBody.append(row);
+    }
+
+    // add a diary entry for this day
+    const form = document.createElement('div'); form.className = 'day-add';
+    const fh = document.createElement('h4'); fh.textContent = '+ Log something for this day'; form.append(fh);
+    const cat = document.createElement('select');
+    for (const k of LOG_CATS) { const o = document.createElement('option'); o.value = k; o.textContent = `${CATS[k].emoji} ${CATS[k].label}`; cat.append(o); }
+    const title = document.createElement('input'); title.type = 'text'; title.placeholder = 'What (optional) — e.g. "Skinned the polytunnel"';
+    const areaSel = document.createElement('select');
+    areaSel.append(new Option('Whole plot / no bed', ''));
+    for (const a of areasData.areas) areaSel.append(new Option(a.name, a.id));
+    const notes = document.createElement('input'); notes.type = 'text'; notes.placeholder = 'Notes (optional)';
+    const addBtn = document.createElement('button'); addBtn.type = 'button'; addBtn.className = 'ctl ctl--primary'; addBtn.textContent = 'Add';
+    addBtn.addEventListener('click', () => {
+      log.entries.push({ id: uid('log-'), date: isoDay, category: cat.value, title: title.value.trim() || undefined, areaId: areaSel.value || undefined, notes: notes.value.trim() || undefined });
+      saveLog(); buildEvents(); render(); openDay(y, m, day);
+    });
+    form.append(cat, title, areaSel, notes, addBtn);
+    dayBody.append(form);
+
+    const menu = document.createElement('menu'); menu.className = 'day-menu';
+    const close = document.createElement('button'); close.type = 'button'; close.className = 'ctl'; close.textContent = 'Close'; close.addEventListener('click', () => dayDialog.close());
+    menu.append(close); dayBody.append(menu);
+    stamp(dayBody);
+    if (!dayDialog.open) dayDialog.showModal();
+  }
+  dayDialog.addEventListener('click', (e) => { if (e.target === dayDialog) dayDialog.close(); });
+
+  // ---- publish diary entries ----------------------------------------------
+  document.getElementById('publish').addEventListener('click', async () => {
+    const token = await getToken(); if (!token) return;
+    barStatus.textContent = 'Saving…';
+    try {
+      await commitFiles(token, [{ path: LOG_PATH, text: JSON.stringify(log, null, 2) }], 'Update plot diary');
+      logBaseline = JSON.stringify(log); bar.hidden = !logDirty(); barStatus.textContent = '✓ Saved — live in ~1 min.';
+    } catch (e) { barStatus.textContent = e.message === 'auth' ? 'Auth failed — check token.' : 'Error: ' + e.message; }
+  });
+  document.getElementById('discard').addEventListener('click', () => {
+    if (!confirm('Discard unsaved diary entries?')) return;
+    overlayClear(LOG_KEY); log = structuredClone(logData); saveLog(); buildEvents(); render(); barStatus.textContent = '';
+  });
+  bar.hidden = !logDirty();
+
   render();
   loadRecentWx();
 </script>
@@ -279,6 +391,28 @@ import Base from '../layouts/Base.astro';
 <style>
   .sownow { background: var(--green-100); border: 1px solid color-mix(in srgb, var(--green) 22%, white); border-radius: var(--radius-sm); padding: 0.55rem 0.9rem; margin-bottom: 1.1rem; font-size: 0.9rem; }
   .sownow a { font-weight: 600; text-decoration: none; }
+
+  .savebar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, white); border-radius: var(--radius-sm); padding: 0.5rem 0.8rem; margin-bottom: 1.1rem; }
+  .savebar__label { font-weight: 700; color: var(--accent); }
+  .savebar__status { color: var(--green-700); font-size: 0.85rem; }
+  .ctl--primary { background: var(--green); color: #fff; border-color: var(--green); }
+  .ctl--ghost { color: var(--muted); border-color: transparent; }
+
+  .dialog { border: 1px solid var(--line); border-radius: var(--radius); padding: 0; max-width: 500px; width: 94vw; max-height: 86vh; box-shadow: var(--shadow); }
+  .dialog::backdrop { background: rgba(20, 28, 18, 0.4); }
+  .day-body { padding: 1.1rem 1.2rem 1.2rem; display: flex; flex-direction: column; gap: 0.6rem; overflow-y: auto; max-height: 82vh; }
+  .day-body h3 { font-size: 1.15rem; }
+  .day-wx { margin: 0; font-size: 0.9rem; font-weight: 600; color: #245a7a; background: #e8f1f7; border-radius: 8px; padding: 0.4rem 0.6rem; }
+  .day-ev { display: flex; align-items: flex-start; gap: 0.6rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.55rem 0.7rem; }
+  .day-ev__tag { flex-shrink: 0; font-size: 0.72rem; font-weight: 700; color: #fff; background: var(--c); border-radius: 999px; padding: 0.18rem 0.6rem; white-space: nowrap; }
+  .day-ev__body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
+  .day-ev__body strong { font-size: 0.95rem; overflow-wrap: anywhere; }
+  .day-del { flex-shrink: 0; font: inherit; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); border-radius: 6px; padding: 0.15rem 0.45rem; }
+  .day-add { display: flex; flex-direction: column; gap: 0.4rem; border-top: 1px solid var(--line); padding-top: 0.7rem; margin-top: 0.2rem; }
+  .day-add h4 { margin: 0; font-size: 0.85rem; color: var(--green-700); }
+  .day-add select, .day-add input { font: inherit; font-size: 1rem; color: var(--ink); padding: 0.45rem 0.55rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; }
+  .day-add .ctl { align-self: flex-start; }
+  .day-menu { display: flex; justify-content: flex-end; margin: 0; padding: 0; }
 
   .wx { background: #e8f1f7; border: 1px solid #c4dcea; color: #245a7a; border-radius: var(--radius-sm); padding: 0.55rem 0.9rem; margin-bottom: 1.1rem; font-size: 0.9rem; font-weight: 600; }
 
@@ -288,8 +422,9 @@ import Base from '../layouts/Base.astro';
   .navbtn { font: inherit; font-size: 1.3rem; line-height: 1; cursor: pointer; width: 2rem; height: 2rem; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); }
   .navbtn:hover { border-color: var(--green); color: var(--green-700); }
   .ctl { font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); padding: 0.35rem 0.7rem; border-radius: 8px; }
-  .filters { display: flex; gap: 0.5rem; }
-  .filt { font: inherit; font-size: 0.9rem; padding: 0.35rem 0.5rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink); }
+  .filters { display: flex; gap: 0.5rem; max-width: 100%; }
+  /* long bed names must not stretch the page wider than the phone screen */
+  .filt { font: inherit; font-size: 0.9rem; padding: 0.35rem 0.5rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink); max-width: min(44vw, 16rem); }
 
   .legend2 { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.9rem; }
   .lgd { display: inline-flex; align-items: center; gap: 0.35rem; font: inherit; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); border-radius: 999px; padding: 0.2rem 0.6rem; }
@@ -302,7 +437,8 @@ import Base from '../layouts/Base.astro';
   .dow { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--paper-2); border-bottom: 1px solid var(--line); }
   .dow span { padding: 0.5rem; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); text-align: left; }
   .grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: minmax(96px, auto); }
-  .cell { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0.3rem; display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+  .cell { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0.3rem; display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; cursor: pointer; }
+  .cell:hover { background: color-mix(in srgb, var(--green) 4%, white); }
   .cell:nth-child(7n) { border-right: 0; }
   .cell--pad { background: color-mix(in srgb, var(--paper-2) 60%, white); }
   .cell__num { font-size: 0.78rem; font-weight: 600; color: var(--muted); }
