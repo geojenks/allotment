@@ -97,6 +97,27 @@
       "depth": "surface",
       "inStock": true,
       "notes": "Stays in the home greenhouse. Keep warm; pinch tips to bush out."
+    },
+    {
+      "id": "seed-3eygd0",
+      "crop": "Courgette",
+      "variety": "Orelia",
+      "family": "cucurbit",
+      "sowIndoors": {
+        "from": 4,
+        "to": 5
+      },
+      "sowOutdoors": {
+        "from": 5,
+        "to": 6
+      },
+      "harvest": {
+        "from": 6,
+        "to": 10
+      },
+      "spacing": "75cm",
+      "depth": "2.5cm",
+      "inStock": true
     }
   ],
   "sowings": [
