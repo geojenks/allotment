@@ -211,6 +211,18 @@
           "harvestTo": "2027-01-31",
           "notes": "Keep well watered through summer."
         }
+      ],
+      "events": [
+        {
+          "id": "ph-taex0t",
+          "date": "2026-07-11",
+          "kind": "photo",
+          "photo": {
+            "src": "photos/bed-psb-celeriac/2026-07-11-ph-taex0t.jpg",
+            "w": 720,
+            "h": 1280
+          }
+        }
       ]
     },
     {
