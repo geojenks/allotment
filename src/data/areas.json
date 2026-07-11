@@ -409,6 +409,18 @@
           "status": "growing",
           "notes": "~2m+ tall."
         }
+      ],
+      "events": [
+        {
+          "id": "ph-zwgbde",
+          "date": "2026-07-11",
+          "kind": "photo",
+          "photo": {
+            "src": "photos/dwarf-cherry/2026-07-11-ph-zwgbde.jpg",
+            "w": 720,
+            "h": 1280
+          }
+        }
       ]
     }
   ],
