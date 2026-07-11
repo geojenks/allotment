@@ -375,7 +375,19 @@
         "w": 12.930612,
         "h": 12.930612
       },
-      "notes": "~1.5m² pond at the very bottom-left. Will be shaded as the dwarf cherry (to its south) grows."
+      "notes": "~1.5m² pond at the very bottom-left. Will be shaded as the dwarf cherry (to its south) grows.",
+      "events": [
+        {
+          "id": "ph-1kvi58",
+          "date": "2026-07-11",
+          "kind": "photo",
+          "photo": {
+            "src": "photos/pond/2026-07-11-ph-1kvi58.jpg",
+            "w": 720,
+            "h": 1280
+          }
+        }
+      ]
     },
     {
       "id": "dwarf-cherry",
