@@ -161,6 +161,8 @@ export interface Seed {
   depth?: string;
   supplier?: string;
   inStock?: boolean;
+  /** Typical weeks from sowing under glass to plant-out; falls back to a per-family default. */
+  nurseryWeeks?: number;
   notes?: string;
 }
 
@@ -193,6 +195,15 @@ export interface Sowing {
   qty?: number; // how many modules/plants in this sowing
   destinationAreaId?: string; // target allotment area, if any
   plantedOutDate?: string; // ISO date
+  /** True for sowings that fruit where they are (e.g. greenhouse tomatoes) — no plant-out step. */
+  noPlantOut?: boolean;
+  /**
+   * Pipeline overrides. When unset these are predicted ADAPTIVELY from the
+   * actual sownDate (not the packet's advisory calendar), so sowing a month
+   * late shifts every downstream date a month. Set explicitly to pin a date.
+   */
+  expectedPlantOut?: string; // ISO date
+  expectedHarvestFrom?: string; // ISO date
   notes?: string;
 }
 

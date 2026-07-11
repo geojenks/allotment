@@ -1,7 +1,7 @@
 ---
 interface Props {
   title?: string;
-  active?: 'layout' | 'calendar' | 'seeds' | 'nursery' | 'projects' | 'plans';
+  active?: 'layout' | 'pipeline' | 'calendar' | 'seeds' | 'nursery' | 'projects' | 'plans';
   wide?: boolean;
 }
 const { title = 'Allotment', active = 'layout', wide = false } = Astro.props;
@@ -9,6 +9,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '') + '/';
 
 const tabs = [
   { key: 'layout', href: base, label: 'Layout' },
+  { key: 'pipeline', href: `${base}pipeline`, label: 'Pipeline' },
   { key: 'calendar', href: `${base}calendar`, label: 'Calendar' },
   { key: 'seeds', href: `${base}seeds`, label: 'Seeds' },
   { key: 'nursery', href: `${base}nursery`, label: 'Nursery' },
