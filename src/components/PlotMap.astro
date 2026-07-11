@@ -1,5 +1,6 @@
 ---
 import plotData from '../data/areas.json';
+import seedsData from '../data/seeds.json';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const mapSrc = `${base}/map/plot-base.png`;
@@ -61,6 +62,8 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
 
         <p id="place-hint" class="place-hint" hidden>Tap inside to place the plant</p>
 
+        <div id="recon" class="recon" hidden></div>
+
         <div id="plant-bar" class="plant-bar" hidden>
           <div id="palette" class="palette" aria-label="Plant icons"></div>
           <button id="pb-done" type="button" class="ctl ctl--primary">✓ Done</button>
@@ -101,7 +104,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   </dialog>
 </section>
 
-<script define:vars={{ plotData, repo, base }}>
+<script define:vars={{ plotData, seedsData, repo, base }}>
   const TYPE_META = {
     bed: { color: '#c98a3b', label: 'Bed' }, tree: { color: '#5f8a36', label: 'Tree' },
     bushes: { color: '#86a948', label: 'Bushes' }, structure: { color: '#7c8aa0', label: 'Structure' },
@@ -109,13 +112,25 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     unused: { color: '#a9a496', label: 'Unused / open' }, boundary: { color: '#8a8577', label: 'Boundary' },
   };
   const STATUS_LABEL = { planned: 'Planned', sown: 'Sown', growing: 'Growing', harvesting: 'Harvesting', done: 'Done', volunteer: 'Self-seeded' };
-  const ICONS = [
-    { icon: '🥔', label: 'Potato' }, { icon: '🥦', label: 'Brassica' }, { icon: '🧅', label: 'Onion' },
-    { icon: '🧄', label: 'Garlic' }, { icon: '🥕', label: 'Carrot / root' }, { icon: '🥬', label: 'Leafy / salad' },
-    { icon: '🍅', label: 'Tomato' }, { icon: '🫛', label: 'Peas / beans' }, { icon: '🎃', label: 'Squash' },
-    { icon: '🌽', label: 'Sweetcorn' }, { icon: '🍓', label: 'Strawberry' }, { icon: '🫐', label: 'Berry' },
-    { icon: '🌿', label: 'Herb' }, { icon: '🌷', label: 'Flower' }, { icon: '🌱', label: 'Seedling' },
+  // Generic emoji pool for (re)assigning an icon to a plant.
+  const ICONS = ['🥔','🥦','🧅','🧄','🥕','🥬','🍅','🫛','🎃','🥒','🌽','🍓','🫐','🍎','🍐','🍒','🌶️','🍆','🌿','🌷','🌻','🌾','🍇','🍋','🌱'];
+  // Best-guess icon from the plant's name.
+  const ICON_GUESS = [
+    [/potato/i, '🥔'], [/broccoli|psb|cabbage|kale|sprout|cauli|brassica|swede|turnip/i, '🥦'],
+    [/onion|shallot|leek/i, '🧅'], [/garlic/i, '🧄'], [/carrot|parsnip|radish|beet/i, '🥕'],
+    [/lettuce|salad|chard|spinach|rocket|leaf/i, '🥬'], [/tomato/i, '🍅'], [/pea|bean/i, '🫛'],
+    [/squash|pumpkin|courgette|marrow/i, '🎃'], [/cucumber|gherkin/i, '🥒'], [/corn/i, '🌽'],
+    [/strawberr/i, '🍓'], [/raspberr|blackberr|currant|gooseberr|berry/i, '🫐'],
+    [/apple/i, '🍎'], [/pear/i, '🍐'], [/cherry|plum/i, '🍒'], [/pepper|chilli/i, '🌶️'], [/aubergine/i, '🍆'],
+    [/basil|herb|mint|parsley|coriander|thyme|rosemary|sage|dill|chive/i, '🌿'],
+    [/asparagus|rhubarb/i, '🌾'], [/flower|dahlia|sunflower|marigold|cosmos/i, '🌻'], [/grape/i, '🍇'],
   ];
+  const guessIcon = (name) => { for (const [re, ic] of ICON_GUESS) if (re.test(name || '')) return ic; return '🌱'; };
+  // Marker condition → colour; slug collar ("fortified") darkens the ring.
+  const COND = { growing: '#3f7d2f', struggling: '#d99a2b', eaten: '#b3402f', dead: '#6b6b6b' };
+  const COND_LABEL = { growing: 'Growing well', struggling: 'Partly eaten but alive', eaten: 'Decimated by slugs', dead: 'Dead / gone' };
+  const fillOf = (m) => COND[m.condition] || COND.growing;
+  const strokeOf = (m) => (m.fortified ? '#33322e' : fillOf(m));
 
   const SVGNS = 'http://www.w3.org/2000/svg';
   const STORE_KEY = 'allotment:plot:v1';
@@ -124,23 +139,29 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   const TX = -98.595917, TY = -49.702042;
 
   // ---- state + persistence ----------------------------------------------
-  const baseline = { areas: plotData.areas, markers: plotData.markers || [] };
+  const baseline = { areas: plotData.areas, markers: plotData.markers || [], cropIcons: plotData.cropIcons || {} };
   let baselineJSON = JSON.stringify(baseline);
   function loadState() {
     try {
       const raw = localStorage.getItem(STORE_KEY);
-      if (raw) { const p = JSON.parse(raw); if (p && Array.isArray(p.areas)) return { areas: p.areas, markers: p.markers || [] }; }
+      if (raw) { const p = JSON.parse(raw); if (p && Array.isArray(p.areas)) return { areas: p.areas, markers: p.markers || [], cropIcons: p.cropIcons || {} }; }
     } catch {}
     return JSON.parse(baselineJSON);
   }
   const st = loadState();
-  let areas = st.areas, markers = st.markers;
+  let areas = st.areas, markers = st.markers, cropIcons = st.cropIcons;
   let saveTimer = null;
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify({ areas, markers })); } catch {} updateSaveState(); }, 150);
+    saveTimer = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify({ areas, markers, cropIcons })); } catch {} updateSaveState(); }, 150);
   }
-  const isDirty = () => JSON.stringify({ areas, markers }) !== baselineJSON;
+  const isDirty = () => JSON.stringify({ areas, markers, cropIcons }) !== baselineJSON;
+
+  // Live sowings (for the crop palette + planner reconciliation): prefer the
+  // seeds page's unsaved localStorage overlay over the build-time file.
+  let sowings = seedsData.sowings || [];
+  try { const raw = localStorage.getItem('allotment:seeds:v1'); if (raw) sowings = JSON.parse(raw).sowings || sowings; } catch {}
+  const iconFor = (crop) => cropIcons[crop] || guessIcon(crop);
 
   // ---- refs --------------------------------------------------------------
   const root = document.getElementById('plot-root');
@@ -177,7 +198,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   // regardless of any stacking context the page layout introduces.
   document.body.append(areaView, markerPop);
 
-  let mode = 'view', tool = 'select', placeIcon = null;
+  let mode = 'view', tool = 'select', placeCrop = null;
   let selected = null, focusedAreaId = null;
   const areaNodes = new Map(), markerNodes = new Map();
 
@@ -208,7 +229,11 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   }
   let raf = null;
   function readVB() { const c = svg.viewBox.baseVal; vb = { x: c.x, y: c.y, w: c.width, h: c.height }; }
-  function writeVB() { svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
+  function writeVB() {
+    svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+    // Zoomed in: lift the aerial photo's plot-outline crop so edges fill in.
+    svg.classList.toggle('zoomed-in', vb.w < overviewVB.w * 0.92);
+  }
   function setVB(target, animate) {
     cancelAnimationFrame(raf);
     if (!animate) { vb = { ...target }; clampPan(); writeVB(); return; }
@@ -290,16 +315,51 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   }
   function updatePlantCounts() {
     for (const [id, n] of areaNodes) { const a = areas.find((x) => x.id === id); const c = a ? markersInArea(a).length : 0; n.count.textContent = c ? `🌱${c}` : ''; }
+    updateRecon();
+  }
+
+  // ---- map ↔ planner reconciliation (soft — informs, never blocks) --------
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  function reconLines(areaId) {
+    const a = areas.find((x) => x.id === areaId); if (!a) return [];
+    const iconCounts = new Map();
+    for (const m of markersInArea(a)) { const k = (m.crop || m.label || 'plant').toLowerCase(); iconCounts.set(k, (iconCounts.get(k) || 0) + 1); }
+    const planCounts = new Map();
+    for (const s of sowings) {
+      if (s.stage === 'planted-out' && s.destinationAreaId === areaId) { const k = s.crop.toLowerCase(); planCounts.set(k, (planCounts.get(k) || 0) + (s.qty || 1)); }
+    }
+    const lines = [];
+    for (const n of [...new Set([...iconCounts.keys(), ...planCounts.keys()])].sort()) {
+      const i = iconCounts.get(n) || 0, p = planCounts.get(n) || 0;
+      if (i === p || p === 0) continue; // only flag when the planner and map disagree
+      if (i === 0) lines.push(`${cap(n)}: ${p} planted out in the planner, no icons dropped yet`);
+      else lines.push(`${cap(n)}: ${p} in the planner vs ${i} icon${i === 1 ? '' : 's'} here`);
+    }
+    // icons with no planner entry at all (only mention crops that exist in sowings, to avoid nagging about trees etc.)
+    for (const [n, i] of iconCounts) {
+      if (planCounts.has(n)) continue;
+      if (sowings.some((s) => s.crop.toLowerCase() === n && s.stage !== 'failed')) lines.push(`${cap(n)}: ${i} icon${i === 1 ? '' : 's'} here, none planted out here in the planner`);
+    }
+    return lines;
+  }
+  function updateRecon() {
+    const el = document.getElementById('recon');
+    if (!el) return;
+    if (!(mode === 'edit' && focusedAreaId)) { el.hidden = true; return; }
+    const lines = reconLines(focusedAreaId);
+    el.hidden = !lines.length;
+    if (lines.length) el.textContent = '📋 ' + lines.join('  ·  ');
   }
 
   // ---- render markers ----------------------------------------------------
   function renderMarkers() { markerLayer.replaceChildren(); markerNodes.clear(); markers.forEach((m) => renderMarker(m)); }
+  const glyphSize = (m) => Math.max(1.3, Math.min(m.r * 1.7, 7));
   function renderMarker(m) {
     const g = el('g', { class: 'marker', 'data-id': m.id });
-    const circle = el('circle', { cx: m.x, cy: m.y, r: m.r, fill: '#3f7d2f', 'fill-opacity': 0.16, stroke: '#3f7d2f', 'stroke-width': 0.4 });
-    const glyph = el('text', { x: m.x, y: m.y, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': Math.max(2.4, Math.min(m.r * 1.4, 7)) });
+    const circle = el('circle', { cx: m.x, cy: m.y, r: m.r, fill: fillOf(m), 'fill-opacity': 0.16, stroke: strokeOf(m), 'stroke-width': m.fortified ? 0.55 : 0.4 });
+    const glyph = el('text', { x: m.x, y: m.y, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': glyphSize(m) });
     glyph.textContent = m.icon;
-    const handle = el('circle', { cx: m.x + m.r, cy: m.y, r: 1, fill: '#fff', stroke: '#3f7d2f', 'stroke-width': 0.45, class: 'handle' });
+    const handle = el('circle', { cx: m.x + m.r, cy: m.y, r: 0.7, fill: '#fff', stroke: '#3f7d2f', 'stroke-width': 0.35, class: 'handle' });
     handle.style.display = 'none';
     g.append(circle, glyph, handle); markerLayer.append(g);
     markerNodes.set(m.id, { group: g, circle, glyph, handle });
@@ -308,8 +368,9 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   function syncMarker(m) {
     const n = markerNodes.get(m.id); if (!n) return;
     n.circle.setAttribute('cx', m.x); n.circle.setAttribute('cy', m.y); n.circle.setAttribute('r', m.r);
+    n.circle.setAttribute('fill', fillOf(m)); n.circle.setAttribute('stroke', strokeOf(m)); n.circle.setAttribute('stroke-width', m.fortified ? 0.55 : 0.4);
     n.glyph.setAttribute('x', m.x); n.glyph.setAttribute('y', m.y);
-    n.glyph.setAttribute('font-size', Math.max(2.4, Math.min(m.r * 1.4, 7))); n.glyph.textContent = m.icon;
+    n.glyph.setAttribute('font-size', glyphSize(m)); n.glyph.textContent = m.icon;
     n.handle.setAttribute('cx', m.x + m.r); n.handle.setAttribute('cy', m.y);
   }
 
@@ -399,6 +460,8 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
       }
       const z = document.createElement('button'); z.type = 'button'; z.className = 'zoom-link'; z.textContent = inArea.length ? '🌱 Arrange plants on the map' : '🌱 Add plants on the map';
       z.addEventListener('click', () => arrangePlants(area.id)); info.append(z);
+      const lines = reconLines(area.id);
+      if (lines.length) { const p = document.createElement('p'); p.className = 'muted small'; p.textContent = '📋 Planner check: ' + lines.join(' · '); info.append(p); }
     }
     if (area.plantings?.length) {
       const hh = document.createElement('h3'); hh.textContent = 'Planted'; info.append(hh);
@@ -439,9 +502,12 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   });
   function markerInfoFrag(m) {
     const frag = document.createDocumentFragment();
-    const h = document.createElement('h2'); h.textContent = `${m.icon} ${m.label || 'Plant'}`; frag.append(h);
+    const h = document.createElement('h2'); h.textContent = `${m.icon} ${m.crop || m.label || 'Plant'}`; frag.append(h);
     const host = areas.find((a) => m.x >= a.shape.x && m.x <= a.shape.x + a.shape.w && m.y >= a.shape.y && m.y <= a.shape.y + a.shape.h);
-    const p = document.createElement('p'); p.className = 'muted'; p.textContent = host ? `In: ${host.name}` : 'Not inside a mapped area.'; frag.append(p);
+    const bits = [host ? `In: ${host.name}` : 'Not inside a mapped area.'];
+    bits.push(COND_LABEL[m.condition] || COND_LABEL.growing);
+    if (m.fortified) bits.push('🛡 slug collar on');
+    const p = document.createElement('p'); p.className = 'muted'; p.textContent = bits.join(' · '); frag.append(p);
     return frag;
   }
 
@@ -467,12 +533,28 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   }
   function markerForm(m) {
     const frag = document.createDocumentFragment();
-    const h = document.createElement('h2'); h.textContent = 'Edit plant'; frag.append(h);
+    const h = document.createElement('h2'); h.textContent = `Edit ${m.crop || m.label || 'plant'}`; frag.append(h);
     const iconWrap = document.createElement('div'); iconWrap.className = 'icon-grid';
-    for (const it of ICONS) { const b = document.createElement('button'); b.type = 'button'; b.className = 'icon-btn' + (it.icon === m.icon ? ' is-active' : ''); b.textContent = it.icon; b.title = it.label; b.addEventListener('click', () => { m.icon = it.icon; if (!m.label) m.label = it.label; syncMarker(m); updatePlantCounts(); showMarkerPop(m.id); save(); }); iconWrap.append(b); }
-    frag.append(field('Icon', iconWrap));
+    for (const icon of ICONS) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'icon-btn' + (icon === m.icon ? ' is-active' : ''); b.textContent = icon;
+      b.addEventListener('click', () => {
+        m.icon = icon;
+        if (m.crop) cropIcons[m.crop] = icon; // future drops of this plant use it too
+        syncMarker(m); updatePlantCounts(); showMarkerPop(m.id); renderPalette(); save();
+      });
+      iconWrap.append(b);
+    }
+    frag.append(field('Icon (also becomes the default for this plant)', iconWrap));
     const label = document.createElement('input'); label.type = 'text'; label.value = m.label || ''; label.addEventListener('input', () => { m.label = label.value; save(); }); frag.append(field('Label', label));
-    const radius = document.createElement('input'); radius.type = 'range'; radius.min = '1'; radius.max = '15'; radius.step = '0.5'; radius.value = String(m.r); radius.addEventListener('input', () => { m.r = Number(radius.value); lastR = m.r; syncMarker(m); save(); }); frag.append(field('Radius', radius));
+    const radius = document.createElement('input'); radius.type = 'range'; radius.min = '0.3'; radius.max = '8'; radius.step = '0.1'; radius.value = String(m.r); radius.addEventListener('input', () => { m.r = Number(radius.value); lastR = m.r; syncMarker(m); save(); }); frag.append(field('Footprint radius', radius));
+    const cond = document.createElement('select');
+    for (const [v, l] of Object.entries(COND_LABEL)) { const o = document.createElement('option'); o.value = v; o.textContent = l; if ((m.condition || 'growing') === v) o.selected = true; cond.append(o); }
+    cond.addEventListener('change', () => { m.condition = cond.value === 'growing' ? undefined : cond.value; syncMarker(m); save(); });
+    frag.append(field('Condition', cond));
+    const fortRow = document.createElement('label'); fortRow.className = 'field field--check';
+    const fort = document.createElement('input'); fort.type = 'checkbox'; fort.checked = !!m.fortified;
+    fort.addEventListener('change', () => { m.fortified = fort.checked || undefined; syncMarker(m); save(); });
+    const fs = document.createElement('span'); fs.textContent = '🛡 Slug collar / fortified (dark ring)'; fortRow.append(fort, fs); frag.append(fortRow);
     const del = document.createElement('button'); del.type = 'button'; del.className = 'danger'; del.textContent = 'Delete plant';
     del.addEventListener('click', () => { const i = markers.findIndex((x) => x.id === m.id); if (i >= 0) markers.splice(i, 1); clearSelection(); renderMarkers(); updatePlantCounts(); refreshSelection(); save(); });
     frag.append(del); return frag;
@@ -486,10 +568,14 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     const aEl = target.closest && target.closest('.area'); if (aEl) return { kind: 'area', id: aEl.getAttribute('data-id'), handle: target.classList.contains('handle') };
     return { kind: 'bg' };
   };
-  let lastR = 2.5; // remember the last plant footprint so a run of taps uses one size
+  let lastR = 0.75; // ~15 cm footprint by default; remembers your last-set size
   function dropMarkerAt(cx, cy) {
     const p = toLocal(cx, cy);
-    const m = { id: uid('m-'), icon: placeIcon ? placeIcon.icon : '🌱', label: placeIcon ? placeIcon.label : '', x: round(p.x), y: round(p.y), r: lastR };
+    const m = {
+      id: uid('m-'), icon: placeCrop ? placeCrop.icon : '🌱',
+      label: placeCrop ? placeCrop.name : '', crop: placeCrop ? placeCrop.name : undefined,
+      x: round(p.x), y: round(p.y), r: lastR,
+    };
     markers.push(m); renderMarker(m); updatePlantCounts(); save();
   }
   svg.addEventListener('pointerdown', (e) => {
@@ -572,14 +658,17 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   }
   function setTool(next) {
     tool = next;
-    if (next !== 'place') { placeIcon = null; placeHint.hidden = true; svg.classList.remove('is-placing'); for (const b of palette.querySelectorAll('.icon-btn')) b.classList.remove('is-active'); }
+    if (next !== 'place') { placeCrop = null; placeHint.hidden = true; svg.classList.remove('is-placing'); for (const b of palette.querySelectorAll('.crop-btn')) b.classList.remove('is-active'); }
     refreshSelection();
   }
   function refreshChrome() {
     const focused = !!focusedAreaId;
     svg.classList.toggle('focused', focused);
     addAreaBtn.hidden = !(mode === 'edit' && !focused);
-    plantBar.hidden = !(mode === 'edit' && focused);
+    const planting = mode === 'edit' && focused;
+    plantBar.hidden = !planting;
+    if (planting) renderPalette();
+    updateRecon();
     if (mode === 'edit' && !focused) setTool('select');
     if (focused) { zoomBtn.hidden = false; zoomBtn.textContent = '← Back to plot'; }
     else if (selected?.kind === 'area') { zoomBtn.hidden = false; zoomBtn.textContent = '🔍 Zoom in'; }
@@ -590,12 +679,57 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   document.getElementById('mode-edit').addEventListener('click', () => setMode('edit'));
   addAreaBtn.addEventListener('click', () => { const area = { id: uid('area-'), name: 'New area', type: 'bed', provisional: true, shape: { x: 118, y: 110, w: 14, h: 10 } }; areas.push(area); renderArea(area, areas.length); selectArea(area.id); save(); });
 
-  for (const it of ICONS) {
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'icon-btn'; b.textContent = it.icon; b.title = `Drop a ${it.label}`;
-    b.addEventListener('click', () => { if (tool === 'place' && placeIcon?.icon === it.icon) { setTool('select'); return; } tool = 'place'; placeIcon = it; placeHint.textContent = `Tap to place ${it.label} — tap ${it.icon} again to stop`; placeHint.hidden = false; svg.classList.add('is-placing'); hideMarkerPop(); for (const x of palette.querySelectorAll('.icon-btn')) x.classList.toggle('is-active', x === b); refreshSelection(); });
-    palette.append(b);
+  // ---- crop palette: YOUR plants (sowings, plantings, existing markers) ---
+  function allCrops(focusId) {
+    const byKey = new Map(); // lowercase -> display name
+    const add = (n) => { if (n) { const k = n.toLowerCase(); if (!byKey.has(k)) byKey.set(k, n); } };
+    for (const s of sowings) if (s.stage !== 'failed') add(s.crop);
+    for (const a of areas) for (const p of a.plantings || []) add(p.crop);
+    for (const m of markers) add(m.crop || m.label);
+    for (const n of Object.keys(cropIcons)) add(n);
+    const focusArea = focusId ? areas.find((x) => x.id === focusId) : null;
+    const score = (name) => {
+      const k = name.toLowerCase();
+      if (focusId && sowings.some((s) => s.stage !== 'failed' && s.destinationAreaId === focusId && s.crop.toLowerCase() === k)) return 0;
+      if (focusArea?.plantings?.some((p) => p.crop.toLowerCase() === k)) return 1;
+      if (sowings.some((s) => s.stage !== 'failed' && s.crop.toLowerCase() === k)) return 2;
+      return 3;
+    };
+    return [...byKey.values()].sort((a, b) => score(a) - score(b) || a.localeCompare(b));
   }
-  SCOPE(palette);
+  function armCrop(name, btn) {
+    tool = 'place'; placeCrop = { name, icon: iconFor(name) };
+    placeHint.textContent = `Tap to place ${name} — tap ${placeCrop.icon} again to stop`;
+    placeHint.hidden = false; svg.classList.add('is-placing'); hideMarkerPop();
+    for (const x of palette.querySelectorAll('.crop-btn')) x.classList.toggle('is-active', x === btn);
+    refreshSelection();
+  }
+  function renderPalette() {
+    palette.replaceChildren();
+    for (const name of allCrops(focusedAreaId)) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'crop-btn'; b.title = `Drop a ${name}`;
+      const ic = document.createElement('span'); ic.className = 'crop-btn__icon'; ic.textContent = iconFor(name);
+      const lb = document.createElement('span'); lb.className = 'crop-btn__label'; lb.textContent = name;
+      b.append(ic, lb);
+      b.addEventListener('click', () => { if (tool === 'place' && placeCrop?.name === name) { setTool('select'); return; } armCrop(name, b); });
+      palette.append(b);
+    }
+    const nb = document.createElement('button'); nb.type = 'button'; nb.className = 'crop-btn crop-btn--new'; nb.title = 'Add a new plant type';
+    const ni = document.createElement('span'); ni.className = 'crop-btn__icon'; ni.textContent = '＋';
+    const nl = document.createElement('span'); nl.className = 'crop-btn__label'; nl.textContent = 'New plant';
+    nb.append(ni, nl);
+    nb.addEventListener('click', () => {
+      const name = (prompt('Name of the new plant (e.g. "Leek"):') || '').trim();
+      if (!name) return;
+      if (!cropIcons[name]) { cropIcons[name] = guessIcon(name); save(); }
+      renderPalette();
+      const btn = [...palette.querySelectorAll('.crop-btn')].find((x) => x.querySelector('.crop-btn__label')?.textContent === name);
+      armCrop(name, btn);
+    });
+    palette.append(nb);
+    SCOPE(palette);
+  }
+  renderPalette();
 
   // map controls
   const centerFocal = () => ({ x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 });
@@ -609,11 +743,11 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   });
 
   // ---- save actions ------------------------------------------------------
-  const buildJSON = () => JSON.stringify({ ...plotData, areas, markers }, null, 2);
+  const buildJSON = () => JSON.stringify({ ...plotData, areas, markers, cropIcons }, null, 2);
   function updateSaveState() { const d = isDirty(); saveStateEl.hidden = !d; avSave.hidden = !d; if (d) saveLabel.textContent = 'Unsaved to site'; }
   document.getElementById('copy-json').addEventListener('click', async () => { document.getElementById('export-text').value = buildJSON(); try { await navigator.clipboard.writeText(buildJSON()); } catch {} exportDialog.showModal(); });
   document.getElementById('download-json').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buildJSON()], { type: 'application/json' })); a.download = 'areas.json'; a.click(); URL.revokeObjectURL(a.href); });
-  document.getElementById('discard').addEventListener('click', () => { if (!confirm('Discard local changes on this device and revert to the saved site version?')) return; localStorage.removeItem(STORE_KEY); const fresh = JSON.parse(baselineJSON); areas = fresh.areas; markers = fresh.markers; clearSelection(); renderAreas(); renderMarkers(); refreshSelection(); updateSaveState(); });
+  document.getElementById('discard').addEventListener('click', () => { if (!confirm('Discard local changes on this device and revert to the saved site version?')) return; localStorage.removeItem(STORE_KEY); const fresh = JSON.parse(baselineJSON); areas = fresh.areas; markers = fresh.markers; cropIcons = fresh.cropIcons || {}; clearSelection(); renderAreas(); renderMarkers(); refreshSelection(); updateSaveState(); });
   const setWeb = (m) => { webStatus.textContent = m || ''; };
   const GH_API = `https://api.github.com/repos/${repo.owner}/${repo.name}`;
   async function getToken() {
@@ -646,7 +780,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   document.getElementById('save-web').addEventListener('click', async () => {
     const token = await getToken(); if (!token) return;
     setWeb('Saving…');
-    try { await commitFiles(token, [{ path: repo.path, text: buildJSON() }], 'Update plot from web editor'); baselineJSON = JSON.stringify({ areas, markers }); updateSaveState(); setWeb('✓ Saved — live in ~1 min.'); }
+    try { await commitFiles(token, [{ path: repo.path, text: buildJSON() }], 'Update plot from web editor'); baselineJSON = JSON.stringify({ areas, markers, cropIcons }); updateSaveState(); setWeb('✓ Saved — live in ~1 min.'); }
     catch (e) { setWeb(e.message === 'auth' ? 'Auth failed — check token, tap again.' : 'Error: ' + e.message); }
   });
 
@@ -683,7 +817,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
       files.push({ path: repo.path, text: buildJSON() });
       if (statusEl) statusEl.textContent = `Uploading ${newEvents.length}…`;
       await commitFiles(token, files, `Add ${newEvents.length} photo(s) to ${area.name}`);
-      baselineJSON = JSON.stringify({ areas, markers }); save(); updateSaveState();
+      baselineJSON = JSON.stringify({ areas, markers, cropIcons }); save(); updateSaveState();
       if (statusEl) statusEl.textContent = '✓ Saved — live in ~1 min.';
       renderInfo();
     } catch (e) {
@@ -841,8 +975,17 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   .plant-bar { position: absolute; left: 0.6rem; right: 0.6rem; bottom: max(0.6rem, env(safe-area-inset-bottom)); z-index: 6; display: flex; align-items: center; gap: 0.5rem; background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.45rem 0.55rem; box-shadow: var(--shadow); }
   .plant-bar .palette { flex: 1; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 2px; }
   .plant-bar .palette::-webkit-scrollbar { display: none; }
-  .plant-bar .icon-btn { font-size: 1.45rem; padding: 0.4rem 0.55rem; flex-shrink: 0; }
   .plant-bar .ctl { flex-shrink: 0; }
+  .crop-btn { display: flex; flex-direction: column; align-items: center; gap: 0; flex-shrink: 0; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 10px; padding: 0.25rem 0.4rem 0.2rem; min-width: 3.2rem; max-width: 4.4rem; }
+  .crop-btn__icon { font-size: 1.35rem; line-height: 1.15; }
+  .crop-btn__label { font-size: 0.58rem; font-weight: 600; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .crop-btn.is-active { border-color: var(--green); background: var(--green-100); }
+  .crop-btn.is-active .crop-btn__label { color: var(--green-700); }
+  .crop-btn--new { border-style: dashed; }
+
+  .recon { position: absolute; left: 0.6rem; right: 0.6rem; bottom: 5rem; z-index: 6; font-size: 0.74rem; line-height: 1.35; background: color-mix(in srgb, #fff7e6 92%, transparent); border: 1px solid #ecd9a8; color: #6b5310; border-radius: 10px; padding: 0.35rem 0.6rem; backdrop-filter: blur(4px); }
+
+  #plot-svg.zoomed-in image { clip-path: none; }
   .map-stage:has(.plant-bar:not([hidden])) .map-controls { bottom: 4.6rem; }
   :global(body.plot-fs) .marker-pop { bottom: 4.9rem; }
 
@@ -936,8 +1079,11 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   #export-dialog menu { padding: 0; margin: 0.6rem 0 0; display: flex; justify-content: flex-end; }
 
   .journal { margin: 0.5rem 0 0.2rem; }
-  .viewer { position: relative; width: 100%; aspect-ratio: 4 / 3; background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; display: grid; place-items: center; }
-  .viewer__img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* Whole photo always visible: the frame adapts to the image (portrait or
+     landscape), capped so tall shots don't take over the screen. */
+  .viewer { position: relative; width: 100%; background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; display: grid; place-items: center; }
+  .viewer__img { max-width: 100%; max-height: 65vh; width: auto; height: auto; object-fit: contain; display: block; margin: 0 auto; }
+  .viewer.is-empty { aspect-ratio: 4 / 3; }
   .viewer.is-empty .viewer__img { display: none; }
   .viewer__empty { color: var(--muted); font-size: 0.9rem; }
   .viewer:not(.is-empty) .viewer__empty { display: none; }
