@@ -84,9 +84,18 @@ in [`astro.config.mjs`](astro.config.mjs).
 
 ## Sections
 
-- **Layout** — the interactive plot map (`src/data/areas.json`).
-- **Calendar** — agenda derived from plantings, dated tasks, and actual sowings.
-- **Seeds** — the seed bank (`src/data/seeds.json`): packet windows + "sow now".
+- **Layout** — the interactive plot map (`src/data/areas.json`). Full-screen
+  "planting mode" for dropping many plants on a bed from a phone.
+- **Pipeline** — every sowing from packet to plate: Seed bank → Nursery →
+  Growing on → Harvest, with adaptive expected dates (predicted from your
+  *actual* sow date, editable per sowing) and green/amber/red status.
+- **Calendar** — agenda derived from plantings, dated tasks, and actual
+  sowings, plus real rainfall (past) and rain forecast from Open-Meteo, with a
+  "worth a watering trip" banner.
+- **Seeds** — the seed bank (`src/data/seeds.json`): packet windows, sow-now /
+  harvest-now filters, and **📷 Scan packet** — photograph a seed packet and a
+  Claude vision call pre-fills the form (needs an Anthropic API key, stored
+  on-device like the GitHub token; ~fractions of a penny per scan).
 - **Nursery** — active sowings under glass, stage tracking and plant-out.
 - **Plans** — beds free vs planted, rotation reference.
 - **Projects** — bigger jobs (`src/data/projects.json`).
@@ -97,6 +106,8 @@ in [`astro.config.mjs`](astro.config.mjs).
 - [x] Per-area photo timeline
 - [x] Calendar / chronological "what to do when" view
 - [x] Seed bank → nursery → calendar pipeline
-- [ ] Smoother map zoom/pan (phone pinch tuning)
+- [x] Pipeline board with adaptive plant-out/harvest predictions
+- [x] Rainfall + watering nudge on the calendar
+- [x] Seed-packet photo scanning
 - [ ] Crop-rotation helper (warns when a plant family returns to a bed too soon)
 - [ ] Companion-planting suggestions

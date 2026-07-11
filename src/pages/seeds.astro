@@ -25,6 +25,8 @@ const count = seedsData.seeds.length;
 
   <div class="toolbar">
     <button id="add-seed" class="ctl" type="button">+ Add seed</button>
+    <button id="scan-seed" class="ctl" type="button">📷 Scan packet</button>
+    <input id="scan-file" type="file" accept="image/*" hidden />
     <select id="sort" class="filt" aria-label="Sort seeds">
       <option value="crop">Sort: A–Z</option>
       <option value="sow">Sort: next to sow</option>
@@ -33,6 +35,7 @@ const count = seedsData.seeds.length;
     <button id="f-sow" class="chip" type="button">🌱 Sowable now</button>
     <button id="f-harvest" class="chip" type="button">🧺 Harvestable now</button>
     <span class="muted small" id="seed-count"></span>
+    <span class="muted small" id="scan-status"></span>
   </div>
 
   <ul id="seed-grid" class="grid"></ul>
@@ -46,9 +49,10 @@ const count = seedsData.seeds.length;
 </Base>
 
 <script>
+  import Anthropic from '@anthropic-ai/sdk';
   import seedsData from '../data/seeds.json';
   import areasData from '../data/areas.json';
-  import { getToken, commitFiles, overlayLoad, overlaySave, overlayClear, uid, todayStr, scopeStamp } from '../lib/datastore';
+  import { getToken, commitFiles, overlayLoad, overlaySave, overlayClear, uid, todayStr, scopeStamp, getAnthropicKey, clearAnthropicKey, compressImage } from '../lib/datastore';
 
   const KEY = 'allotment:seeds:v1';
   const PATH = 'src/data/seeds.json';
@@ -217,10 +221,10 @@ const count = seedsData.seeds.length;
     return { row, get: () => (from.value && to.value ? { from: +from.value, to: +to.value } : undefined) };
   }
 
-  function openSeed(seed) {
-    const editing = !!seed;
+  function openSeed(seed, draft = false) {
+    const editing = !!seed && !draft; // a draft pre-fills the form but adds a NEW packet
     seedForm.replaceChildren();
-    const h = document.createElement('h3'); h.textContent = editing ? 'Edit seed' : 'Add seed'; seedForm.append(h);
+    const h = document.createElement('h3'); h.textContent = draft ? 'Scanned packet — check & add' : editing ? 'Edit seed' : 'Add seed'; seedForm.append(h);
     const crop = document.createElement('input'); crop.type = 'text'; crop.required = true; crop.value = seed?.crop || ''; seedForm.append(field('Crop', crop));
     const variety = document.createElement('input'); variety.type = 'text'; variety.value = seed?.variety || ''; seedForm.append(field('Variety', variety));
     const family = document.createElement('select');
@@ -245,12 +249,12 @@ const count = seedsData.seeds.length;
     seedForm.onsubmit = () => {
       if (!crop.value.trim()) return;
       const rec = {
-        id: seed?.id || uid('seed-'), crop: crop.value.trim(), variety: variety.value.trim() || undefined,
+        id: editing ? seed.id : uid('seed-'), crop: crop.value.trim(), variety: variety.value.trim() || undefined,
         family: family.value, sowIndoors: wi.get(), sowOutdoors: wo.get(), harvest: wh.get(),
         spacing: spacing.value.trim() || undefined, depth: depth.value.trim() || undefined,
         inStock: stock.checked, notes: notes.value.trim() || undefined,
       };
-      if (seed) Object.assign(seed, rec, { id: seed.id }); else data.seeds.push(rec);
+      if (editing) Object.assign(seed, rec, { id: seed.id }); else data.seeds.push(rec);
       save(); render();
     };
     stamp(seedForm); seedDialog.showModal();
@@ -290,6 +294,81 @@ const count = seedsData.seeds.length;
     };
     stamp(sowForm); sowDialog.showModal();
   }
+
+  // ---- packet scanner: photo of a seed packet → pre-filled form ----------
+  const SCAN_MODEL = 'claude-haiku-4-5'; // vision-capable; a scan costs well under 1p
+  const winSchema = {
+    anyOf: [
+      { type: 'null' },
+      { type: 'object', additionalProperties: false, required: ['from', 'to'],
+        properties: { from: { type: 'integer', enum: [1,2,3,4,5,6,7,8,9,10,11,12] }, to: { type: 'integer', enum: [1,2,3,4,5,6,7,8,9,10,11,12] } } },
+    ],
+  };
+  const nullableStr = { anyOf: [{ type: 'null' }, { type: 'string' }] };
+  const PACKET_SCHEMA = {
+    type: 'object', additionalProperties: false,
+    required: ['crop', 'variety', 'family', 'sowIndoors', 'sowOutdoors', 'harvest', 'spacing', 'depth', 'notes'],
+    properties: {
+      crop: { type: 'string' },
+      variety: nullableStr,
+      family: { type: 'string', enum: FAMILIES.map((f) => f[0]) },
+      sowIndoors: winSchema, sowOutdoors: winSchema, harvest: winSchema,
+      spacing: nullableStr, depth: nullableStr, notes: nullableStr,
+    },
+  };
+  const SCAN_PROMPT = `This is a photo of a seed packet (front or back). Extract the growing information.
+- Months are integers 1–12; a window is {from, to} inclusive (it may wrap the year end).
+- sowIndoors: any window for sowing under cover — indoors, greenhouse, propagator, windowsill, "under glass".
+- sowOutdoors: any window for sowing direct outdoors / "where they are to grow" / "sow direct".
+- If the packet gives one sowing window without saying which, decide from the crop: tender crops usually start under cover, root crops usually direct.
+- harvest: the harvest/pick/crop window.
+- family: the botanical group — brassica (cabbage family), legume (peas/beans), allium (onion/garlic/leek), solanaceae (tomato/potato/pepper/aubergine), apiaceae (carrot/parsnip/celery/fennel), cucurbit (squash/courgette/cucumber), chenopod (beetroot/chard/spinach), flower, other (herbs, sweetcorn, lettuce, anything else).
+- spacing and depth: short strings close to what's printed (e.g. "30cm", "thin to 5cm", "1.5cm").
+- notes: at most two short growing tips from the packet, or null.
+Use null for anything the packet doesn't say. Do not guess windows that aren't printed.`;
+
+  async function scanPacket(file) {
+    const status = document.getElementById('scan-status');
+    const key = getAnthropicKey(); if (!key) return;
+    status.textContent = '📷 Reading the packet…';
+    try {
+      const base64 = await compressImage(file);
+      const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
+      const response = await client.messages.create({
+        model: SCAN_MODEL,
+        max_tokens: 1024,
+        output_config: { format: { type: 'json_schema', schema: PACKET_SCHEMA } },
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
+            { type: 'text', text: SCAN_PROMPT },
+          ],
+        }],
+      });
+      if (response.stop_reason === 'refusal') throw new Error('the model declined to read this image');
+      const text = response.content.find((b) => b.type === 'text')?.text;
+      if (!text) throw new Error('no text in the response');
+      const ex = JSON.parse(text);
+      status.textContent = '';
+      const win = (w) => (w && w.from && w.to ? { from: w.from, to: w.to } : undefined);
+      openSeed({
+        crop: ex.crop || '', variety: ex.variety || undefined,
+        family: FAMILIES.some((f) => f[0] === ex.family) ? ex.family : 'other',
+        sowIndoors: win(ex.sowIndoors), sowOutdoors: win(ex.sowOutdoors), harvest: win(ex.harvest),
+        spacing: ex.spacing || undefined, depth: ex.depth || undefined,
+        notes: ex.notes || undefined, inStock: true,
+      }, true);
+    } catch (e) {
+      if (e instanceof Anthropic.AuthenticationError) { clearAnthropicKey(); status.textContent = 'API key rejected — tap Scan again to re-enter it.'; }
+      else if (e instanceof Anthropic.RateLimitError) status.textContent = 'Rate limited — wait a minute and retry.';
+      else if (e instanceof Anthropic.APIError) status.textContent = 'Claude API error: ' + e.message;
+      else status.textContent = 'Scan failed: ' + e.message;
+    }
+  }
+  const scanFile = document.getElementById('scan-file');
+  document.getElementById('scan-seed').addEventListener('click', () => scanFile.click());
+  scanFile.addEventListener('change', () => { if (scanFile.files?.[0]) scanPacket(scanFile.files[0]); scanFile.value = ''; });
 
   // ---- toolbar -------------------------------------------------------
   document.getElementById('add-seed').addEventListener('click', () => openSeed(null));

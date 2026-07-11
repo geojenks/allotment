@@ -64,6 +64,42 @@ export function overlayClear(key: string) {
 export const uid = (p: string) => p + Math.random().toString(36).slice(2, 8);
 export const todayStr = () => new Date().toISOString().slice(0, 10);
 
+// ---- Anthropic API key (for the seed-packet scanner) -----------------------
+const ANTHROPIC_KEY = 'allotment:anthropic-key';
+export function getAnthropicKey(): string | null {
+  let k = localStorage.getItem(ANTHROPIC_KEY);
+  if (!k) {
+    k = prompt(
+      'Paste an Anthropic API key to scan seed packets.\n\nCreate one at console.anthropic.com → API keys. Stored only on this device; each scan costs a fraction of a penny.'
+    );
+    if (!k) return null;
+    localStorage.setItem(ANTHROPIC_KEY, k.trim());
+  }
+  return k.trim();
+}
+export function clearAnthropicKey() {
+  localStorage.removeItem(ANTHROPIC_KEY);
+}
+
+/** Downscale + JPEG-encode an image file, returning base64 (without the data: prefix). */
+export function compressImage(file: File, max = 1568, q = 0.85): Promise<string> {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * s);
+      c.height = Math.round(img.naturalHeight * s);
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', q).split(',')[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('could not read image')); };
+    img.src = url;
+  });
+}
+
 /**
  * Astro scopes `<style>` to `data-astro-cid-*` attributes it stamps on elements
  * at build time — but elements we create in client JS don't get them, so scoped
