@@ -190,6 +190,7 @@ export interface Sowing {
   location: NurseryLocation;
   underGlass: boolean; // started under cover (nursery) vs sown direct
   stage: SowingStage;
+  qty?: number; // how many modules/plants in this sowing
   destinationAreaId?: string; // target allotment area, if any
   plantedOutDate?: string; // ISO date
   notes?: string;

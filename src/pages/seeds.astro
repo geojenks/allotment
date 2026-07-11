@@ -25,6 +25,13 @@ const count = seedsData.seeds.length;
 
   <div class="toolbar">
     <button id="add-seed" class="ctl" type="button">+ Add seed</button>
+    <select id="sort" class="filt" aria-label="Sort seeds">
+      <option value="crop">Sort: A–Z</option>
+      <option value="sow">Sort: next to sow</option>
+      <option value="harvest">Sort: next to harvest</option>
+    </select>
+    <button id="f-sow" class="chip" type="button">🌱 Sowable now</button>
+    <button id="f-harvest" class="chip" type="button">🧺 Harvestable now</button>
     <span class="muted small" id="seed-count"></span>
   </div>
 
@@ -57,6 +64,21 @@ const count = seedsData.seeds.length;
   ];
   const monthIn = (m, w) => (w ? (w.from <= w.to ? m >= w.from && m <= w.to : m >= w.from || m <= w.to) : false);
   const famLabel = (f) => (FAMILIES.find((x) => x[0] === f) || [, f])[1];
+  /** Whole months until a window next opens: 0 = open now, Infinity = no window. */
+  const monthsUntil = (w) => {
+    if (!w) return Infinity;
+    for (let d = 0; d <= 11; d++) if (monthIn(((nowMonth - 1 + d) % 12) + 1, w)) return d;
+    return Infinity;
+  };
+  const nextSow = (s) => Math.min(monthsUntil(s.sowIndoors), monthsUntil(s.sowOutdoors));
+  /** Plain-English answer to "greenhouse first, or straight in the ground?" */
+  function methodText(s) {
+    const hasIn = !!s.sowIndoors, hasOut = !!s.sowOutdoors;
+    if (hasIn && hasOut) return '🏠/🌍 Either works: start under cover, or sow straight into the ground.';
+    if (hasIn) return '🏠 Start under cover (greenhouse/windowsill), plant out later — not straight in the ground.';
+    if (hasOut) return '🌍 Sow direct — straight into the ground where it will grow. No greenhouse start.';
+    return '';
+  }
 
   let data = overlayLoad(KEY, seedsData);
   let baseline = JSON.stringify(seedsData);
@@ -89,10 +111,20 @@ const count = seedsData.seeds.length;
     row.append(cells); return row;
   }
 
+  let sortBy = 'crop', fSow = false, fHarvest = false;
   function render() {
     grid.replaceChildren();
-    for (const s of data.seeds) grid.append(seedCard(s));
-    document.getElementById('seed-count').textContent = `${data.seeds.length} packet${data.seeds.length === 1 ? '' : 's'}`;
+    let list = data.seeds.slice();
+    if (fSow) list = list.filter((s) => nextSow(s) === 0);
+    if (fHarvest) list = list.filter((s) => monthsUntil(s.harvest) === 0);
+    if (sortBy === 'sow') list.sort((a, b) => nextSow(a) - nextSow(b) || a.crop.localeCompare(b.crop));
+    else if (sortBy === 'harvest') list.sort((a, b) => monthsUntil(a.harvest) - monthsUntil(b.harvest) || a.crop.localeCompare(b.crop));
+    else list.sort((a, b) => a.crop.localeCompare(b.crop));
+    for (const s of list) grid.append(seedCard(s));
+    const count = document.getElementById('seed-count');
+    count.textContent = list.length === data.seeds.length
+      ? `${data.seeds.length} packet${data.seeds.length === 1 ? '' : 's'}`
+      : `${list.length} of ${data.seeds.length} packets`;
     renderSowNow();
     stamp(grid);
     updateBar();
@@ -109,6 +141,19 @@ const count = seedsData.seeds.length;
     li.append(top);
 
     if (s.inStock === false) { const o = document.createElement('span'); o.className = 'oos'; o.textContent = 'out of stock'; li.append(o); }
+
+    const badges = [];
+    if (monthIn(nowMonth, s.sowIndoors)) badges.push(['sow indoors now', 'now--in']);
+    if (monthIn(nowMonth, s.sowOutdoors)) badges.push(['sow direct now', 'now--out']);
+    if (monthIn(nowMonth, s.harvest)) badges.push(['harvest now', 'now--harvest']);
+    if (badges.length) {
+      const row = document.createElement('div'); row.className = 'nowrow';
+      for (const [t, cls] of badges) { const b = document.createElement('span'); b.className = 'now ' + cls; b.textContent = t; row.append(b); }
+      li.append(row);
+    }
+
+    const method = methodText(s);
+    if (method) { const mp = document.createElement('p'); mp.className = 'seed__method'; mp.textContent = method; li.append(mp); }
 
     const bars = document.createElement('div'); bars.className = 'bars';
     bars.append(monthBar('Indoors', s.sowIndoors, '#7aa86a'));
@@ -215,8 +260,11 @@ const count = seedsData.seeds.length;
     sowForm.replaceChildren();
     const h = document.createElement('h3'); h.textContent = `Sow ${seed.crop}${seed.variety ? ' · ' + seed.variety : ''}`; sowForm.append(h);
     const date = document.createElement('input'); date.type = 'date'; date.value = todayStr(); date.max = todayStr(); sowForm.append(field('Date sown', date));
+    const qty = document.createElement('input'); qty.type = 'number'; qty.min = '1'; qty.step = '1'; qty.inputMode = 'numeric'; qty.placeholder = 'e.g. 12'; sowForm.append(field('How many (modules / plants)', qty));
     const loc = document.createElement('select');
-    for (const [v, l] of LOCATIONS) { const o = document.createElement('option'); o.value = v; o.textContent = l; if ((presetLoc || 'greenhouse') === v) o.selected = true; loc.append(o); }
+    // Direct-only packets (no indoor window) default to sowing outdoors.
+    const defLoc = presetLoc || (seed.sowOutdoors && !seed.sowIndoors ? 'outdoor' : 'greenhouse');
+    for (const [v, l] of LOCATIONS) { const o = document.createElement('option'); o.value = v; o.textContent = l; if (defLoc === v) o.selected = true; loc.append(o); }
     sowForm.append(field('Where', loc));
     const dest = document.createElement('select');
     const dn = document.createElement('option'); dn.value = ''; dn.textContent = '— none yet —'; dest.append(dn);
@@ -233,7 +281,8 @@ const count = seedsData.seeds.length;
       const sowing = {
         id: uid('sow-'), seedId: seed.id, crop: seed.crop, variety: seed.variety, family: seed.family,
         sownDate: date.value || todayStr(), location: loc.value, underGlass: loc.value !== 'outdoor',
-        stage: 'sown', destinationAreaId: dest.value || undefined, notes: notes.value.trim() || undefined,
+        stage: 'sown', qty: qty.value ? Math.max(1, Math.round(+qty.value)) : undefined,
+        destinationAreaId: dest.value || undefined, notes: notes.value.trim() || undefined,
       };
       data.sowings.push(sowing); save();
       barStatus.textContent = sowing.underGlass ? 'Added to the Nursery →' : 'Logged on the Calendar →';
@@ -242,8 +291,14 @@ const count = seedsData.seeds.length;
     stamp(sowForm); sowDialog.showModal();
   }
 
-  // ---- publish bar -------------------------------------------------------
+  // ---- toolbar -------------------------------------------------------
   document.getElementById('add-seed').addEventListener('click', () => openSeed(null));
+  const sortSel = document.getElementById('sort');
+  sortSel.addEventListener('change', () => { sortBy = sortSel.value; render(); });
+  const chipSow = document.getElementById('f-sow');
+  const chipHarvest = document.getElementById('f-harvest');
+  chipSow.addEventListener('click', () => { fSow = !fSow; chipSow.classList.toggle('is-on', fSow); render(); });
+  chipHarvest.addEventListener('click', () => { fHarvest = !fHarvest; chipHarvest.classList.toggle('is-on', fHarvest); render(); });
   document.getElementById('publish').addEventListener('click', async () => {
     const token = await getToken(); if (!token) return;
     barStatus.textContent = 'Saving…';
@@ -277,7 +332,18 @@ const count = seedsData.seeds.length;
   .sownow__chip--indoors { border-color: #7aa86a; color: #3c6b3a; }
   .sownow__chip--direct { border-color: var(--green); color: var(--green-700); }
 
-  .toolbar { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
+  .toolbar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .filt { font: inherit; font-size: 0.9rem; padding: 0.35rem 0.5rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; color: var(--ink); }
+  .chip { font: inherit; font-size: 0.84rem; font-weight: 600; cursor: pointer; border-radius: 999px; padding: 0.3rem 0.75rem; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); }
+  .chip.is-on { border-color: var(--green); background: var(--green-100); color: var(--green-700); }
+
+  .nowrow { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .now { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 999px; padding: 0.14rem 0.55rem; color: #fff; }
+  .now--in { background: #7aa86a; }
+  .now--out { background: var(--green); }
+  .now--harvest { background: var(--accent); }
+
+  .seed__method { margin: 0; font-size: 0.82rem; color: var(--ink-soft); background: var(--paper-2); border-radius: 8px; padding: 0.35rem 0.55rem; }
 
   .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1rem; }
   .seed { padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; gap: 0.55rem; }
@@ -303,7 +369,7 @@ const count = seedsData.seeds.length;
   .dialog form { padding: 1.2rem; display: flex; flex-direction: column; gap: 0.2rem; }
   .dialog h3 { margin-bottom: 0.5rem; }
   .field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.35rem 0; font-size: 0.8rem; color: var(--muted); }
-  .field input, .field select, .field textarea { font: inherit; font-size: 0.95rem; color: var(--ink); padding: 0.4rem 0.55rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; }
+  .field input, .field select, .field textarea { font: inherit; font-size: 1rem; color: var(--ink); padding: 0.4rem 0.55rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; }
   .field--check { flex-direction: row; align-items: center; gap: 0.5rem; }
   .wrow { display: grid; grid-template-columns: 6rem 1fr; align-items: center; gap: 0.5rem; margin: 0.35rem 0; font-size: 0.8rem; color: var(--muted); }
   .wrow__sel { display: flex; align-items: center; gap: 0.4rem; }
