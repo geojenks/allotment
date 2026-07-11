@@ -296,6 +296,18 @@
           "harvestTo": "2026-07-15",
           "notes": "Three crowns. Stop pulling by mid-summer to let plants recover."
         }
+      ],
+      "events": [
+        {
+          "id": "ph-52pzb1",
+          "date": "2026-07-11",
+          "kind": "photo",
+          "photo": {
+            "src": "photos/rhubarb/2026-07-11-ph-52pzb1.jpg",
+            "w": 1280,
+            "h": 720
+          }
+        }
       ]
     },
     {
