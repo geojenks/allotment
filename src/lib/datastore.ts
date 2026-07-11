@@ -3,6 +3,9 @@
 // power the Seeds and Nursery pages.
 
 export const REPO = { owner: 'geojenks', name: 'allotment', branch: 'main' };
+
+/** Thingwall Park allotments, Fishponds, Bristol — for weather lookups. */
+export const PLOT_LOCATION = { lat: 51.476, lon: -2.542 };
 const GH_API = `https://api.github.com/repos/${REPO.owner}/${REPO.name}`;
 const TOKEN_KEY = 'allotment:gh-token';
 
