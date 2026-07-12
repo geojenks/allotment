@@ -171,7 +171,7 @@
         },
         {
           "id": "ph-bl1bhh",
-          "date": "2026-07-11",
+          "date": "2026-07-09",
           "kind": "photo",
           "photo": {
             "src": "photos/bed-asparagus/2026-07-11-ph-bl1bhh.jpg",
@@ -215,7 +215,7 @@
       "events": [
         {
           "id": "ph-taex0t",
-          "date": "2026-07-11",
+          "date": "2026-07-09",
           "kind": "photo",
           "photo": {
             "src": "photos/bed-psb-celeriac/2026-07-11-ph-taex0t.jpg",
@@ -434,12 +434,235 @@
       "r": 1.53
     },
     {
-      "id": "m-pb9p79",
+      "id": "m-rhspdx",
       "icon": "🌱",
       "label": "Seedling",
-      "x": 113.937,
-      "y": 112.931,
+      "x": 108.753,
+      "y": 109.841,
+      "r": 2.5
+    },
+    {
+      "id": "m-l6wgz8",
+      "icon": "🍓",
+      "label": "Cabbage",
+      "x": 115.858,
+      "y": 110.5,
       "r": 1
+    },
+    {
+      "id": "m-qrww2p",
+      "icon": "🌱",
+      "label": "Seedling",
+      "x": 109.224,
+      "y": 114.298,
+      "r": 2.5
+    },
+    {
+      "id": "m-0hxuak",
+      "icon": "🌱",
+      "label": "Seedling",
+      "x": 108.735,
+      "y": 112.157,
+      "r": 2.5
+    },
+    {
+      "id": "m-ujriqk",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 108.124,
+      "y": 120.772,
+      "r": 0.75
+    },
+    {
+      "id": "m-lakz16",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 110.71,
+      "y": 120.691,
+      "r": 0.75
+    },
+    {
+      "id": "m-lluvhd",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 112.892,
+      "y": 120.95,
+      "r": 0.75
+    },
+    {
+      "id": "m-atuxzy",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 115.462,
+      "y": 120.901,
+      "r": 0.75
+    },
+    {
+      "id": "m-h8a3wb",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 117.919,
+      "y": 121.095,
+      "r": 0.75
+    },
+    {
+      "id": "m-kmvij7",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 120.796,
+      "y": 121.354,
+      "r": 0.75
+    },
+    {
+      "id": "m-xawo21",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 109.336,
+      "y": 122.857,
+      "r": 0.75
+    },
+    {
+      "id": "m-3txbn5",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 111.89,
+      "y": 123.051,
+      "r": 0.75
+    },
+    {
+      "id": "m-3bjt74",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 114.25,
+      "y": 122.905,
+      "r": 0.75
+    },
+    {
+      "id": "m-756mim",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 116.755,
+      "y": 122.841,
+      "r": 0.75
+    },
+    {
+      "id": "m-cuph2s",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 119.212,
+      "y": 123.277,
+      "r": 0.75
+    },
+    {
+      "id": "m-2j8zca",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 121.475,
+      "y": 123.536,
+      "r": 0.75
+    },
+    {
+      "id": "m-3i9zqp",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 108.367,
+      "y": 124.991,
+      "r": 0.75
+    },
+    {
+      "id": "m-cpc3g6",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 110.904,
+      "y": 124.91,
+      "r": 0.75
+    },
+    {
+      "id": "m-33youa",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 113.183,
+      "y": 125.217,
+      "r": 0.75
+    },
+    {
+      "id": "m-zqajeu",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 116.206,
+      "y": 124.926,
+      "r": 0.75
+    },
+    {
+      "id": "m-2keb6w",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 119.794,
+      "y": 125.475,
+      "r": 0.75
+    },
+    {
+      "id": "m-2f8pu2",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 120.909,
+      "y": 126.768,
+      "r": 0.75
+    },
+    {
+      "id": "m-ldnu7b",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 117.563,
+      "y": 126.752,
+      "r": 0.75
+    },
+    {
+      "id": "m-1jtjra",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 114.832,
+      "y": 126.526,
+      "r": 0.75
+    },
+    {
+      "id": "m-j4z804",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 111.68,
+      "y": 126.833,
+      "r": 0.75
+    },
+    {
+      "id": "m-ofb3jn",
+      "icon": "🌾",
+      "label": "Asparagus",
+      "crop": "Asparagus",
+      "x": 108.819,
+      "y": 126.817,
+      "r": 0.75
     }
-  ]
+  ],
+  "cropIcons": {}
 }
