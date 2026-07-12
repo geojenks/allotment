@@ -54,6 +54,7 @@ import Base from '../layouts/Base.astro';
   import logData from '../data/log.json';
   import plansData from '../data/plans.json';
   import { scopeStamp, PLOT_LOCATION, getToken, commitFiles, overlayLoad, overlaySave, overlayClear, uid, todayStr } from '../lib/datastore';
+  import { openPlantSheet } from '../lib/plantsheet';
 
   const stamp = scopeStamp(document.getElementById('grid'));
   const SITE_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -348,7 +349,12 @@ import Base from '../layouts/Base.astro';
       if (e.area) { const ar = document.createElement('span'); ar.className = 'muted small'; ar.textContent = e.area; body.append(ar); }
       if (e.detail) { const d = document.createElement('span'); d.className = 'small'; d.textContent = e.detail; body.append(d); }
       const links = document.createElement('span'); links.className = 'day-links';
-      if (e.areaId) { const a = document.createElement('a'); a.href = `${SITE_BASE}/#${e.areaId}`; a.textContent = 'open bed →'; links.append(a); }
+      if (e.crop) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'day-crop'; b.textContent = `about ${e.crop.toLowerCase()} →`;
+        b.addEventListener('click', () => openPlantSheet(e.crop, { seeds: overlayLoad('allotment:seeds:v1', seedsData), areas: areasData.areas, base: SITE_BASE }));
+        links.append(b);
+      }
+      if (e.areaId) { const a = document.createElement('a'); a.href = `${SITE_BASE}/map#${e.areaId}`; a.textContent = 'open bed →'; links.append(a); }
       if (!e.logId && (e.cat === 'sow' || e.cat === 'plant' || e.cat === 'harvest')) { const a = document.createElement('a'); a.href = `${SITE_BASE}/pipeline`; a.textContent = 'pipeline →'; links.append(a); }
       if (links.childNodes.length) body.append(links);
       row.append(tag, body);
@@ -427,6 +433,7 @@ import Base from '../layouts/Base.astro';
   .day-del { flex-shrink: 0; font: inherit; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); border-radius: 6px; padding: 0.15rem 0.45rem; }
   .day-links { display: flex; gap: 0.7rem; font-size: 0.8rem; margin-top: 0.1rem; }
   .day-links a { font-weight: 600; text-decoration: none; }
+  .day-crop { font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--green-700); background: none; border: 0; padding: 0; cursor: pointer; }
   .day-add { display: flex; flex-direction: column; gap: 0.4rem; border-top: 1px solid var(--line); padding-top: 0.7rem; margin-top: 0.2rem; }
   .day-add h4 { margin: 0; font-size: 0.85rem; color: var(--green-700); }
   .day-add select, .day-add input { font: inherit; font-size: 1rem; color: var(--ink); padding: 0.45rem 0.55rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; }

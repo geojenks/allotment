@@ -1,8 +1,190 @@
 ---
 import Base from '../layouts/Base.astro';
-import PlotMap from '../components/PlotMap.astro';
 ---
 
-<Base title="Allotment — Layout" active="layout" wide>
-  <PlotMap />
+<Base title="Allotment — Today" active="today">
+  <header class="page-head">
+    <p class="eyebrow">The plot right now</p>
+    <h1 id="today-title">Today</h1>
+    <p id="today-sub"></p>
+  </header>
+
+  <div id="wx" class="wx" hidden></div>
+
+  <section id="attention-sec" hidden>
+    <h2 class="sec">Needs attention</h2>
+    <div id="attention" class="list"></div>
+  </section>
+
+  <section id="sownow-sec" hidden>
+    <h2 class="sec">Sow now</h2>
+    <div id="sownow" class="chips"></div>
+  </section>
+
+  <section id="picking-sec" hidden>
+    <h2 class="sec">Picking now &amp; soon</h2>
+    <div id="picking" class="list"></div>
+  </section>
+
+  <nav class="tiles" aria-label="Sections">
+    <a class="tile" href="map"><span>🗺️</span>Map</a>
+    <a class="tile" href="pipeline"><span>🌱</span>Pipeline</a>
+    <a class="tile" href="calendar"><span>📅</span>Calendar</a>
+    <a class="tile" href="seeds"><span>🌰</span>Seeds</a>
+    <a class="tile" href="plans"><span>🗓️</span>Plans</a>
+    <a class="tile" href="map#home-greenhouse"><span>🏡</span>Greenhouse</a>
+  </nav>
 </Base>
+
+<script>
+  import areasData from '../data/areas.json';
+  import seedsData from '../data/seeds.json';
+  import plansData from '../data/plans.json';
+  import { overlayLoad, scopeStamp, PLOT_LOCATION } from '../lib/datastore';
+  import { openPlantSheet } from '../lib/plantsheet';
+
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  // Old deep links pointed the site root at a bed (…/#bed-id) — send them to the map.
+  const hashId = decodeURIComponent(location.hash.replace(/^#/, ''));
+  if (hashId && areasData.areas.some((a) => a.id === hashId)) location.replace(`${base}/map${location.hash}`);
+
+  const seeds = overlayLoad('allotment:seeds:v1', seedsData);
+  const plans = overlayLoad('allotment:plans:v1', plansData);
+  const areaName = (id) => areasData.areas.find((a) => a.id === id)?.name;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  document.getElementById('today-sub').textContent = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  const stamp = scopeStamp(document.getElementById('attention'));
+  const NURSERY_WEEKS = { brassica: 6, legume: 3, allium: 9, solanaceae: 8, apiaceae: 5, cucurbit: 4, chenopod: 4, asparagus: 10, other: 6, flower: 6 };
+  const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const daysUntil = (iso) => Math.round((new Date(iso + 'T00:00:00') - new Date(todayISO + 'T00:00:00')) / 86400000);
+  const seedOf = (s) => (seeds.seeds || []).find((x) => x.id === s.seedId);
+  const monthIn = (m, w) => (w ? (w.from <= w.to ? m >= w.from && m <= w.to : m >= w.from || m <= w.to) : false);
+  const nowMonth = today.getMonth() + 1;
+
+  function expPlantOut(s) {
+    if (s.expectedPlantOut) return s.expectedPlantOut;
+    return addDays(s.sownDate, (seedOf(s)?.nurseryWeeks ?? NURSERY_WEEKS[s.family] ?? 6) * 7);
+  }
+  function expHarvest(s) {
+    if (s.expectedHarvestFrom) return s.expectedHarvestFrom;
+    const seed = seedOf(s); const sowW = seed?.sowIndoors || seed?.sowOutdoors;
+    if (seed?.harvest && sowW) return addDays(s.sownDate, Math.round(((seed.harvest.from - sowW.from + 12) % 12) * 30.44));
+    return addDays(s.sownDate, 14 * 7);
+  }
+  const title = (s) => `${s.crop}${s.qty ? ` ×${s.qty}` : ''}`;
+
+  function row(el, emoji, cls, text, href, crop) {
+    const r = document.createElement(crop ? 'button' : 'a');
+    r.className = 'row row--' + cls;
+    if (crop) { r.type = 'button'; r.addEventListener('click', () => openPlantSheet(crop, { seeds, areas: areasData.areas, base })); }
+    else r.href = href;
+    const e = document.createElement('span'); e.className = 'row__emoji'; e.textContent = emoji;
+    const t = document.createElement('span'); t.className = 'row__text'; t.textContent = text;
+    const arrow = document.createElement('span'); arrow.className = 'row__go'; arrow.textContent = '›';
+    r.append(e, t, arrow); el.append(r);
+  }
+
+  // ---- needs attention ------------------------------------------------------
+  const att = document.getElementById('attention');
+  for (const s of seeds.sowings || []) {
+    if (s.stage === 'failed' || !s.underGlass || s.stage === 'planted-out' || s.noPlantOut) continue;
+    const d = daysUntil(expPlantOut(s));
+    if (d < 0) row(att, '🪴', 'late', `${title(s)} — plant out overdue by ${-d} days`, null, s.crop);
+    else if (d <= 7) row(att, '🪴', 'soon', `${title(s)} — plant out ${d === 0 ? 'today' : `in ${d} days`}`, null, s.crop);
+  }
+  for (const seed of seeds.seeds || []) {
+    if (seed.inStock === false) continue;
+    const inNow = monthIn(nowMonth, seed.sowIndoors), outNow = monthIn(nowMonth, seed.sowOutdoors);
+    const nextM = (nowMonth % 12) + 1;
+    if ((inNow || outNow) && !(monthIn(nextM, seed.sowIndoors) || monthIn(nextM, seed.sowOutdoors)))
+      row(att, '🌰', 'late', `${seed.crop}${seed.variety ? ` ‘${seed.variety}’` : ''} — last month to sow`, `${base}/seeds`);
+  }
+  for (const p of plans.plans || []) {
+    const weeks = NURSERY_WEEKS[p.family] ?? 6;
+    const sowBy = addDays(p.from + '-01', -weeks * 7);
+    const d = daysUntil(sowBy);
+    const what = p.crops?.length ? p.crops.join(', ') : p.family;
+    if (d < 0) row(att, '🗓️', 'late', `Plan: sow ${what} for ${areaName(p.areaId) || 'a bed'} — sow-by has passed`, `${base}/plans`);
+    else if (d <= 21) row(att, '🗓️', 'soon', `Plan: sow ${what} for ${areaName(p.areaId) || 'a bed'} within ${d} days`, `${base}/plans`);
+  }
+  document.getElementById('attention-sec').hidden = !att.childNodes.length;
+
+  // ---- picking now & soon -----------------------------------------------------
+  const pick = document.getElementById('picking');
+  for (const s of seeds.sowings || []) {
+    if (s.stage === 'failed') continue;
+    if (!(s.stage === 'planted-out' || !s.underGlass || s.noPlantOut)) continue;
+    const d = daysUntil(expHarvest(s));
+    if (d <= 0) row(pick, '🧺', 'harvest', `${title(s)} — ready to pick`, null, s.crop);
+    else if (d <= 14) row(pick, '🧺', 'soon', `${title(s)} — ready in ~${d} days`, null, s.crop);
+  }
+  document.getElementById('picking-sec').hidden = !pick.childNodes.length;
+
+  // ---- sow now chips ----------------------------------------------------------
+  const sn = document.getElementById('sownow');
+  for (const seed of seeds.seeds || []) {
+    if (seed.inStock === false) continue;
+    const inNow = monthIn(nowMonth, seed.sowIndoors), outNow = monthIn(nowMonth, seed.sowOutdoors);
+    if (!inNow && !outNow) continue;
+    const a = document.createElement('a'); a.className = 'chip'; a.href = `${base}/seeds`;
+    a.textContent = `${seed.crop} — ${outNow ? 'direct' : 'indoors'}`;
+    sn.append(a);
+  }
+  document.getElementById('sownow-sec').hidden = !sn.childNodes.length;
+  stamp(att); stamp(pick); stamp(sn);
+
+  // ---- watering banner (Open-Meteo) --------------------------------------------
+  (async () => {
+    try {
+      const KEYW = 'allotment:wx:recent:v1';
+      let v = null;
+      try { const raw = localStorage.getItem(KEYW); if (raw) { const c = JSON.parse(raw); if (Date.now() - c.t < 3600e3) v = c.v; } } catch {}
+      if (!v) {
+        const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${PLOT_LOCATION.lat}&longitude=${PLOT_LOCATION.lon}&timezone=auto&daily=precipitation_sum,precipitation_probability_max&past_days=92&forecast_days=16`);
+        v = await r.json();
+        try { localStorage.setItem(KEYW, JSON.stringify({ t: Date.now(), v })); } catch {}
+      }
+      const rain = new Map();
+      (v.daily.time || []).forEach((d, i) => rain.set(d, { mm: v.daily.precipitation_sum?.[i] ?? 0, prob: v.daily.precipitation_probability_max?.[i] }));
+      const dayISO = (k) => addDays(todayISO, k);
+      let since = null, lastMM = 0;
+      for (let k = 0; k <= 92; k++) { const e = rain.get(dayISO(-k)); if (e && e.mm >= 2 && dayISO(-k) <= todayISO) { since = k; lastMM = e.mm; break; } }
+      let nextIn = null, nextE = null;
+      for (let k = 1; k <= 16; k++) { const e = rain.get(dayISO(k)); if (e && (e.mm >= 2 || (e.prob ?? 0) >= 60)) { nextIn = k; nextE = e; break; } }
+      const fmtDay = (k) => new Date(new Date(todayISO + 'T00:00:00').getTime() + k * 86400000).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+      const bits = [];
+      if (since === null) bits.push('No proper rain in the last 3 months');
+      else if (since === 0) bits.push(`Raining today (${Math.round(lastMM)}mm) — no need to water`);
+      else if (since === 1) bits.push(`Rained yesterday (${Math.round(lastMM)}mm) — soil should be damp`);
+      else bits.push(`No proper rain for ${since} days`);
+      if (since !== null && since > 1) {
+        bits.push(nextIn !== null ? `next likely rain ${fmtDay(nextIn)}${nextE.prob ? ` (${nextE.prob}%)` : ''}` : 'none in the 16-day forecast');
+        if (since >= 4 && (nextIn === null || nextIn >= 2)) bits.push('💦 worth a watering trip');
+      }
+      const el = document.getElementById('wx');
+      el.textContent = '💧 ' + bits.join(' · ');
+      el.hidden = false;
+    } catch {}
+  })();
+</script>
+
+<style>
+  .wx { background: #e8f1f7; border: 1px solid #c4dcea; color: #245a7a; border-radius: var(--radius-sm); padding: 0.55rem 0.9rem; margin-bottom: 1.2rem; font-size: 0.92rem; font-weight: 600; }
+  .sec { font-size: 1.05rem; margin: 1.2rem 0 0.6rem; }
+  .list { display: flex; flex-direction: column; gap: 0.4rem; }
+  .row { display: flex; align-items: center; gap: 0.6rem; font: inherit; text-align: left; cursor: pointer; text-decoration: none; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--line-strong); border-radius: 10px; padding: 0.55rem 0.75rem; box-shadow: var(--shadow-sm); }
+  .row--late { border-left-color: #b3402f; }
+  .row--soon { border-left-color: #d99a2b; }
+  .row--harvest { border-left-color: var(--accent); }
+  .row__emoji { font-size: 1.1rem; }
+  .row__text { flex: 1; font-size: 0.92rem; font-weight: 600; }
+  .row__go { color: var(--muted); font-size: 1.2rem; }
+  .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .chip { font-size: 0.85rem; font-weight: 600; text-decoration: none; color: var(--green-700); border: 1px solid color-mix(in srgb, var(--green) 30%, white); background: var(--green-100); border-radius: 999px; padding: 0.28rem 0.75rem; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 0.7rem; margin-top: 1.6rem; }
+  .tile { display: flex; align-items: center; gap: 0.55rem; text-decoration: none; color: var(--ink); font-weight: 700; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.85rem 1rem; box-shadow: var(--shadow-sm); }
+  .tile span { font-size: 1.35rem; }
+  .tile:hover { border-color: var(--green); }
+</style>

@@ -299,7 +299,7 @@ const count = seedsData.seeds.length;
     sowForm.append(field('Where', loc));
     const dest = document.createElement('select');
     const dn = document.createElement('option'); dn.value = ''; dn.textContent = '— none yet —'; dest.append(dn);
-    for (const a of areasData.areas) { const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; dest.append(o); }
+    for (const a of areasData.areas) { if (a.id === 'home-greenhouse') continue; const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; dest.append(o); }
     sowForm.append(field('Destination bed (optional)', dest));
     const notes = document.createElement('textarea'); notes.rows = 2; notes.value = ''; sowForm.append(field('Notes', notes));
 

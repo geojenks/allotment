@@ -36,7 +36,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       <ul id="col-seeds" class="cards"></ul>
     </section>
     <section class="col">
-      <h2>🌱 Nursery <span class="colcount" id="n-nursery"></span> <a class="gh-link" href={`${base}/#home-greenhouse`}>📷 journal</a></h2>
+      <h2>🌱 Nursery <span class="colcount" id="n-nursery"></span> <a class="gh-link" href={`${base}/map#home-greenhouse`}>📷 journal</a></h2>
       <ul id="col-nursery" class="cards"></ul>
       <p class="empty" id="e-nursery" hidden>Nothing under glass.</p>
     </section>
@@ -308,14 +308,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       if (shots.length) {
         const row = document.createElement('div'); row.className = 'progress__row';
         for (const ev of shots.slice(-6)) {
-          const a = document.createElement('a'); a.href = `${SITE_BASE}/#${photoAreaId}`;
+          const a = document.createElement('a'); a.href = `${SITE_BASE}/map#${photoAreaId}`;
           const img = document.createElement('img'); img.src = `${SITE_BASE}/${ev.photo.src}`; img.alt = ev.date; img.loading = 'lazy'; img.title = ev.date;
           a.append(img); row.append(a);
         }
         prog.append(row);
       }
       const place = inNursery ? 'the greenhouse journal' : (areaName(photoAreaId) || 'the bed');
-      const link = document.createElement('a'); link.className = 'progress__link'; link.href = `${SITE_BASE}/#${photoAreaId}`;
+      const link = document.createElement('a'); link.className = 'progress__link'; link.href = `${SITE_BASE}/map#${photoAreaId}`;
       link.textContent = shots.length ? `See progress in ${place} →` : `Open ${place} (no photos in this window yet) →`;
       prog.append(link);
       detailForm.append(prog);
@@ -358,7 +358,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
     const dest = document.createElement('select');
     const dn = document.createElement('option'); dn.value = ''; dn.textContent = '— no bed yet —'; dest.append(dn);
-    for (const a of areasData.areas) { const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; if (s.destinationAreaId === a.id) o.selected = true; dest.append(o); }
+    for (const a of areasData.areas) { if (a.id === "home-greenhouse") continue; const o = document.createElement("option"); o.value = a.id; o.textContent = a.name; if (s.destinationAreaId === a.id) o.selected = true; dest.append(o); }
     dest.addEventListener('change', () => { s.destinationAreaId = dest.value || undefined; save(); });
     detailForm.append(field('Bed', dest));
 
@@ -401,7 +401,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     detailForm.append(field('Where did they go?', where));
     const dest = document.createElement('select');
     dest.append(new Option('— choose bed —', ''));
-    for (const a of areasData.areas) dest.append(new Option(a.name, a.id));
+    for (const a of areasData.areas) if (a.id !== "home-greenhouse") dest.append(new Option(a.name, a.id));
     detailForm.append(field('Bed', dest));
 
     const menu = document.createElement('div'); menu.className = 'dialog__menu';
