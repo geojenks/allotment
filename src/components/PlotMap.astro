@@ -217,12 +217,24 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     if (w / h < EA) w = h * EA; else h = w / EA;
     return { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h };
   }
+  // "Home" view: on wide-relative stages (phone full-width) fill the width and
+  // pan up/down the plot; on tall stages (desktop strip) fit the whole plot.
+  function homeView(cy) {
+    const EA = elAspect();
+    if (EA <= (PLOT.w / PLOT.h) * 1.45) return fitBounds(PLOT, 1);
+    const w = PLOT.w + 2, h = w / EA;
+    let y = (cy ?? PLOT.y + h / 2) - h / 2;
+    y = Math.min(Math.max(y, PLOT.y - 1), PLOT.y + PLOT.h + 1 - h);
+    return { x: PLOT.x + PLOT.w / 2 - w / 2, y, w, h };
+  }
+  let didLayout = false;
   function relayout() {
     overviewVB = fitBounds(PLOT, 1);
-    maxW = overviewVB.w; minW = overviewVB.w / 14;
+    maxW = overviewVB.w; minW = PLOT.w / 12;
     if (focusedAreaId) { const a = areas.find((x) => x.id === focusedAreaId); if (a) setVB(focusVB(a)); }
-    else if (vb.w < overviewVB.w * 0.9) { /* user has zoomed in — keep it */ clampPan(); writeVB(); }
-    else setVB(overviewVB);
+    else if (didLayout && vb.w < overviewVB.w * 0.9) { /* user has zoomed in — keep it */ clampPan(); writeVB(); }
+    else setVB(homeView());
+    didLayout = true;
   }
   function focusVB(a) {
     return fitBounds({ x: a.shape.x + TX, y: a.shape.y + TY, w: a.shape.w, h: a.shape.h }, 0.8);
@@ -274,7 +286,9 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     focusedAreaId = id; setVB(focusVB(a), true); refreshChrome();
   }
   function zoomOut() {
-    focusedAreaId = null; setTool('select'); setVB(overviewVB, true); refreshChrome();
+    const a = areas.find((x) => x.id === focusedAreaId);
+    const cy = a ? a.shape.y + TY + a.shape.h / 2 : undefined; // keep the bed in view
+    focusedAreaId = null; setTool('select'); setVB(homeView(cy), true); refreshChrome();
   }
 
   // ---- helpers -----------------------------------------------------------
@@ -735,7 +749,9 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   const centerFocal = () => ({ x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 });
   document.getElementById('zin').addEventListener('click', () => { cancelAnimationFrame(raf); readVB(); const f = centerFocal(); applyZoom(vb, vb.w * 0.7, f.x, f.y); });
   document.getElementById('zout').addEventListener('click', () => { cancelAnimationFrame(raf); readVB(); const f = centerFocal(); applyZoom(vb, vb.w * 1.43, f.x, f.y); });
-  document.getElementById('zreset').addEventListener('click', () => zoomOut());
+  document.getElementById('zreset').addEventListener('click', () => {
+    focusedAreaId = null; setTool('select'); setVB(fitBounds(PLOT, 1), true); refreshChrome(); // whole plot
+  });
   document.getElementById('fs').addEventListener('click', () => {
     const on = mapCard.classList.toggle('map-card--full');
     document.body.classList.toggle('plot-fs', on);
@@ -1113,7 +1129,10 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   .timeline__txt { font-size: 0.9rem; }
 
   @media (max-width: 820px) {
-    .map-stage { height: min(74vh, 720px); width: auto; }
+    /* full width on phones: the plot fills the screen side-to-side and you pan up/down */
+    .plot__grid { display: block; }
+    .map-card { width: 100%; }
+    .map-stage { aspect-ratio: auto; width: 100%; height: min(76vh, 760px); }
     .save-state { margin-left: 0; width: 100%; }
   }
   @media (pointer: coarse) {
