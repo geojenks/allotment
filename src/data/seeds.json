@@ -227,7 +227,7 @@
       "family": "other",
       "sowIndoors": {
         "from": 1,
-        "to": 12
+        "to": 3
       },
       "sowOutdoors": {
         "from": 3,
@@ -268,12 +268,14 @@
       "crop": "Cabbage",
       "variety": "Greyhound",
       "family": "brassica",
-      "sownDate": "2026-05-20",
+      "sownDate": "2026-06-08",
       "location": "greenhouse",
       "underGlass": true,
       "stage": "planted-out",
       "plantedOutDate": "2026-06-25",
-      "notes": "Nursed ~5 weeks in the greenhouse, then planted out at the allotment."
+      "notes": "Bought as large plugs, then planted out",
+      "qty": 9,
+      "destinationAreaId": "bed-1-left"
     },
     {
       "id": "sow-tomato-2026",
