@@ -38,7 +38,7 @@ const count = seedsData.seeds.length;
     <span class="muted small" id="scan-status"></span>
   </div>
 
-  <ul id="seed-grid" class="grid"></ul>
+  <div id="seed-grid" class="groups"></div>
 
   <dialog id="seed-dialog" class="dialog">
     <form id="seed-form" method="dialog"></form>
@@ -116,6 +116,7 @@ const count = seedsData.seeds.length;
   }
 
   let sortBy = 'crop', fSow = false, fHarvest = false;
+  const openFams = new Set(); // which family groups the user has expanded
   function render() {
     grid.replaceChildren();
     let list = data.seeds.slice();
@@ -124,7 +125,27 @@ const count = seedsData.seeds.length;
     if (sortBy === 'sow') list.sort((a, b) => nextSow(a) - nextSow(b) || a.crop.localeCompare(b.crop));
     else if (sortBy === 'harvest') list.sort((a, b) => monthsUntil(a.harvest) - monthsUntil(b.harvest) || a.crop.localeCompare(b.crop));
     else list.sort((a, b) => a.crop.localeCompare(b.crop));
-    for (const s of list) grid.append(seedCard(s));
+
+    // group into collapsible families (group order follows the sort)
+    const groups = new Map();
+    for (const s of list) { if (!groups.has(s.family)) groups.set(s.family, []); groups.get(s.family).push(s); }
+    const filtering = fSow || fHarvest;
+    for (const [fam, items] of groups) {
+      const det = document.createElement('details'); det.className = 'famgrp';
+      det.open = filtering || openFams.has(fam) || groups.size <= 2;
+      det.addEventListener('toggle', () => { if (det.open) openFams.add(fam); else openFams.delete(fam); });
+      const sum = document.createElement('summary');
+      const name = document.createElement('span'); name.className = 'famgrp__name'; name.textContent = famLabel(fam);
+      const n = document.createElement('span'); n.className = 'famgrp__n'; n.textContent = `${items.length}`;
+      sum.append(name, n);
+      const sowNowN = items.filter((s) => nextSow(s) === 0).length;
+      const harvNowN = items.filter((s) => monthsUntil(s.harvest) === 0).length;
+      if (sowNowN) { const b = document.createElement('span'); b.className = 'now now--out'; b.textContent = `${sowNowN} to sow`; sum.append(b); }
+      if (harvNowN) { const b = document.createElement('span'); b.className = 'now now--harvest'; b.textContent = `${harvNowN} to pick`; sum.append(b); }
+      const ul = document.createElement('ul'); ul.className = 'grid';
+      for (const s of items) ul.append(seedCard(s));
+      det.append(sum, ul); grid.append(det);
+    }
     const count = document.getElementById('seed-count');
     count.textContent = list.length === data.seeds.length
       ? `${data.seeds.length} packet${data.seeds.length === 1 ? '' : 's'}`
@@ -423,6 +444,16 @@ Use null for anything the packet doesn't say. Do not guess windows that aren't p
   .now--harvest { background: var(--accent); }
 
   .seed__method { margin: 0; font-size: 0.82rem; color: var(--ink-soft); background: var(--paper-2); border-radius: 8px; padding: 0.35rem 0.55rem; }
+
+  .groups { display: flex; flex-direction: column; gap: 0.6rem; }
+  .famgrp { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+  .famgrp summary { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.75rem 1rem; font-weight: 700; list-style: none; }
+  .famgrp summary::-webkit-details-marker { display: none; }
+  .famgrp summary::before { content: '▸'; color: var(--muted); transition: transform 0.15s ease; }
+  .famgrp[open] summary::before { transform: rotate(90deg); }
+  .famgrp__name { font-size: 1.02rem; }
+  .famgrp__n { font-size: 0.78rem; font-weight: 600; color: var(--muted); background: var(--paper-2); border-radius: 999px; padding: 0.08rem 0.55rem; }
+  .famgrp .grid { padding: 0 0.8rem 0.9rem; }
 
   .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1rem; }
   .seed { padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; gap: 0.55rem; }
