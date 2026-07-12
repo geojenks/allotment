@@ -380,6 +380,34 @@
       "underGlass": true,
       "stage": "sown",
       "qty": 3
+    },
+    {
+      "id": "sow-cd0iw3",
+      "crop": "Cauliflower",
+      "family": "brassica",
+      "sownDate": "2026-06-27",
+      "location": "outdoor",
+      "underGlass": false,
+      "stage": "planted-out",
+      "plantedOutDate": "2026-06-27",
+      "qty": 8,
+      "destinationAreaId": "bed-1-left",
+      "expectedHarvestFrom": "2026-10-02",
+      "notes": "Bought as plants"
+    },
+    {
+      "id": "sow-e9rlfc",
+      "crop": "Savoy Cabbage",
+      "family": "brassica",
+      "sownDate": "2026-07-12",
+      "location": "outdoor",
+      "underGlass": false,
+      "stage": "planted-out",
+      "plantedOutDate": "2026-07-12",
+      "qty": 10,
+      "destinationAreaId": "bed-1-left",
+      "expectedHarvestFrom": "2026-10-10",
+      "notes": "Bought as plants"
     }
   ]
 }
