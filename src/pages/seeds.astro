@@ -68,6 +68,12 @@ const count = seedsData.seeds.length;
   ];
   const monthIn = (m, w) => (w ? (w.from <= w.to ? m >= w.from && m <= w.to : m >= w.from || m <= w.to) : false);
   const famLabel = (f) => (FAMILIES.find((x) => x[0] === f) || [, f])[1];
+  /** One colour per family, used on group headers and crop rows. */
+  const FAM_COLORS = {
+    brassica: '#4a7c3f', legume: '#2f7d5a', allium: '#8a5fb0', solanaceae: '#c05a3a',
+    apiaceae: '#d9922b', cucurbit: '#9c9b2e', chenopod: '#a04f7c', other: '#64748b', flower: '#c26a9a',
+  };
+  const famColor = (f) => FAM_COLORS[f] || '#64748b';
   /** Whole months until a window next opens: 0 = open now, Infinity = no window. */
   const monthsUntil = (w) => {
     if (!w) return Infinity;
@@ -132,19 +138,21 @@ const count = seedsData.seeds.length;
     const filtering = fSow || fHarvest;
     for (const [fam, items] of groups) {
       const det = document.createElement('details'); det.className = 'famgrp';
+      det.style.setProperty('--fc', famColor(fam));
       det.open = filtering || openFams.has(fam) || groups.size <= 2;
       det.addEventListener('toggle', () => { if (det.open) openFams.add(fam); else openFams.delete(fam); });
       const sum = document.createElement('summary');
+      const dot = document.createElement('span'); dot.className = 'famgrp__dot';
       const name = document.createElement('span'); name.className = 'famgrp__name'; name.textContent = famLabel(fam);
       const n = document.createElement('span'); n.className = 'famgrp__n'; n.textContent = `${items.length}`;
-      sum.append(name, n);
+      sum.append(dot, name, n);
       const sowNowN = items.filter((s) => nextSow(s) === 0).length;
       const harvNowN = items.filter((s) => monthsUntil(s.harvest) === 0).length;
       if (sowNowN) { const b = document.createElement('span'); b.className = 'now now--out'; b.textContent = `${sowNowN} to sow`; sum.append(b); }
       if (harvNowN) { const b = document.createElement('span'); b.className = 'now now--harvest'; b.textContent = `${harvNowN} to pick`; sum.append(b); }
-      const ul = document.createElement('ul'); ul.className = 'grid';
-      for (const s of items) ul.append(seedCard(s));
-      det.append(sum, ul); grid.append(det);
+      const rows = document.createElement('div'); rows.className = 'rows';
+      for (const s of items) rows.append(seedCard(s));
+      det.append(sum, rows); grid.append(det);
     }
     const count = document.getElementById('seed-count');
     count.textContent = list.length === data.seeds.length
@@ -155,51 +163,49 @@ const count = seedsData.seeds.length;
     updateBar();
   }
 
+  const openSeeds = new Set(); // expanded crop rows
   function seedCard(s) {
-    const li = document.createElement('li'); li.className = 'card seed';
-    const top = document.createElement('div'); top.className = 'seed__top';
-    const h = document.createElement('div');
-    const title = document.createElement('h3'); title.textContent = s.crop; h.append(title);
-    if (s.variety) { const v = document.createElement('span'); v.className = 'seed__var'; v.textContent = s.variety; h.append(v); }
-    top.append(h);
-    const fam = document.createElement('span'); fam.className = 'tagf'; fam.textContent = famLabel(s.family); top.append(fam);
-    li.append(top);
+    const det = document.createElement('details'); det.className = 'seedrow';
+    det.style.setProperty('--fc', famColor(s.family));
+    det.open = openSeeds.has(s.id);
+    det.addEventListener('toggle', () => { if (det.open) openSeeds.add(s.id); else openSeeds.delete(s.id); });
 
-    if (s.inStock === false) { const o = document.createElement('span'); o.className = 'oos'; o.textContent = 'out of stock'; li.append(o); }
+    // collapsed line: name + variety + state
+    const sum = document.createElement('summary');
+    const t = document.createElement('span'); t.className = 'seedrow__name'; t.textContent = s.crop; sum.append(t);
+    if (s.variety) { const v = document.createElement('span'); v.className = 'seedrow__var'; v.textContent = s.variety; sum.append(v); }
+    const state = document.createElement('span'); state.className = 'seedrow__state';
+    const mini = (txt, cls) => { const b = document.createElement('span'); b.className = 'now ' + cls; b.textContent = txt; state.append(b); };
+    if (monthIn(nowMonth, s.sowIndoors)) mini('sow indoors', 'now--in');
+    if (monthIn(nowMonth, s.sowOutdoors)) mini('sow direct', 'now--out');
+    if (monthIn(nowMonth, s.harvest)) mini('harvest', 'now--harvest');
+    if (s.inStock === false) mini('out of stock', 'now--oos');
+    sum.append(state);
+    det.append(sum);
 
-    const badges = [];
-    if (monthIn(nowMonth, s.sowIndoors)) badges.push(['sow indoors now', 'now--in']);
-    if (monthIn(nowMonth, s.sowOutdoors)) badges.push(['sow direct now', 'now--out']);
-    if (monthIn(nowMonth, s.harvest)) badges.push(['harvest now', 'now--harvest']);
-    if (badges.length) {
-      const row = document.createElement('div'); row.className = 'nowrow';
-      for (const [t, cls] of badges) { const b = document.createElement('span'); b.className = 'now ' + cls; b.textContent = t; row.append(b); }
-      li.append(row);
-    }
-
+    // expanded body: the full packet
+    const body = document.createElement('div'); body.className = 'seedrow__body';
     const method = methodText(s);
-    if (method) { const mp = document.createElement('p'); mp.className = 'seed__method'; mp.textContent = method; li.append(mp); }
-
+    if (method) { const mp = document.createElement('p'); mp.className = 'seed__method'; mp.textContent = method; body.append(mp); }
     const bars = document.createElement('div'); bars.className = 'bars';
     bars.append(monthBar('Indoors', s.sowIndoors, '#7aa86a'));
     bars.append(monthBar('Direct', s.sowOutdoors, '#5f8a36'));
     bars.append(monthBar('Harvest', s.harvest, '#c2622d'));
-    li.append(bars);
-
+    body.append(bars);
     if (s.spacing || s.depth) {
       const meta = document.createElement('p'); meta.className = 'seed__meta muted small';
       meta.textContent = [s.spacing && `spacing ${s.spacing}`, s.depth && `depth ${s.depth}`].filter(Boolean).join(' · ');
-      li.append(meta);
+      body.append(meta);
     }
-    if (s.notes) { const n = document.createElement('p'); n.className = 'seed__notes'; n.textContent = s.notes; li.append(n); }
-
+    if (s.notes) { const n = document.createElement('p'); n.className = 'seed__notes'; n.textContent = s.notes; body.append(n); }
     const actions = document.createElement('div'); actions.className = 'seed__actions';
     const sow = document.createElement('button'); sow.type = 'button'; sow.className = 'ctl ctl--primary'; sow.textContent = '🌱 Sow';
     sow.addEventListener('click', () => openSow(s));
     const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'ctl'; edit.textContent = 'Edit';
     edit.addEventListener('click', () => openSeed(s));
-    actions.append(sow, edit); li.append(actions);
-    return li;
+    actions.append(sow, edit); body.append(actions);
+    det.append(body);
+    return det;
   }
 
   function renderSowNow() {
@@ -446,16 +452,25 @@ Use null for anything the packet doesn't say. Do not guess windows that aren't p
   .seed__method { margin: 0; font-size: 0.82rem; color: var(--ink-soft); background: var(--paper-2); border-radius: 8px; padding: 0.35rem 0.55rem; }
 
   .groups { display: flex; flex-direction: column; gap: 0.6rem; }
-  .famgrp { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
-  .famgrp summary { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.75rem 1rem; font-weight: 700; list-style: none; }
+  .famgrp { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--fc, var(--line-strong)); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+  .famgrp summary { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.75rem 1rem; font-weight: 700; list-style: none; flex-wrap: wrap; }
   .famgrp summary::-webkit-details-marker { display: none; }
   .famgrp summary::before { content: '▸'; color: var(--muted); transition: transform 0.15s ease; }
   .famgrp[open] summary::before { transform: rotate(90deg); }
+  .famgrp__dot { width: 0.75rem; height: 0.75rem; border-radius: 50%; background: var(--fc); }
   .famgrp__name { font-size: 1.02rem; }
   .famgrp__n { font-size: 0.78rem; font-weight: 600; color: var(--muted); background: var(--paper-2); border-radius: 999px; padding: 0.08rem 0.55rem; }
-  .famgrp .grid { padding: 0 0.8rem 0.9rem; }
+  .famgrp .rows { display: flex; flex-direction: column; gap: 0.45rem; padding: 0 0.7rem 0.8rem; }
 
-  .grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1rem; }
+  .seedrow { border: 1px solid var(--line); border-left: 3px solid color-mix(in srgb, var(--fc) 55%, white); border-radius: 10px; background: var(--paper); }
+  .seedrow[open] { background: var(--panel); border-left-color: var(--fc); }
+  .seedrow summary { display: flex; align-items: baseline; gap: 0.45rem; padding: 0.55rem 0.7rem; cursor: pointer; list-style: none; flex-wrap: wrap; }
+  .seedrow summary::-webkit-details-marker { display: none; }
+  .seedrow__name { font-weight: 700; }
+  .seedrow__var { color: var(--muted); font-size: 0.85rem; }
+  .seedrow__state { margin-left: auto; display: flex; gap: 0.25rem; flex-wrap: wrap; }
+  .seedrow__body { padding: 0.1rem 0.8rem 0.8rem; display: flex; flex-direction: column; gap: 0.55rem; }
+  .now--oos { background: #9a938a; }
   .seed { padding: 1rem 1.1rem 1.1rem; display: flex; flex-direction: column; gap: 0.55rem; }
   .seed__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; }
   .seed__top h3 { font-size: 1.12rem; }
