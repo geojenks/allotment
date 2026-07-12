@@ -2,24 +2,6 @@
   "_comment": "Seed bank + sowings. `seeds` is your packet catalogue (months are 1-12). `sowings` are actual sowings you've recorded — these drive the real calendar and the Nursery page. Edit on the Seeds/Nursery pages and 'Save to website'.",
   "seeds": [
     {
-      "id": "tomato-gardeners-delight",
-      "crop": "Tomato",
-      "variety": "Gardener's Delight",
-      "family": "solanaceae",
-      "sowIndoors": {
-        "from": 2,
-        "to": 4
-      },
-      "harvest": {
-        "from": 7,
-        "to": 10
-      },
-      "spacing": "45cm",
-      "depth": "5mm",
-      "inStock": true,
-      "notes": "Cordon. Pinch out side shoots. Grows on at home in the greenhouse."
-    },
-    {
       "id": "cabbage-greyhound",
       "crop": "Cabbage",
       "variety": "Greyhound",
@@ -259,6 +241,66 @@
       "depth": "1cm (1/2in)",
       "inStock": true,
       "notes": "Quick to grow with excellent tolerance to bolting. Peppery flavoured purple coloured flesh, great for soups, stews, salads and kimchi."
+    },
+    {
+      "id": "seed-179ix0",
+      "crop": "Asparagus",
+      "variety": "Mary Washington",
+      "family": "apiaceae",
+      "sowIndoors": {
+        "from": 4,
+        "to": 5
+      },
+      "harvest": {
+        "from": 5,
+        "to": 6
+      },
+      "spacing": "45cm (18in) apart",
+      "depth": "7.5cm (3in)",
+      "inStock": true,
+      "notes": "Bumper crops within 3 years. Do not harvest until plants are 3 years old."
+    },
+    {
+      "id": "seed-h79j45",
+      "crop": "Tomato",
+      "variety": "Sweet success",
+      "family": "solanaceae",
+      "sowIndoors": {
+        "from": 2,
+        "to": 4
+      },
+      "sowOutdoors": {
+        "from": 3,
+        "to": 4
+      },
+      "harvest": {
+        "from": 7,
+        "to": 10
+      },
+      "spacing": "60cm apart",
+      "inStock": true,
+      "notes": "Multiple trusses of sugar sweet fruits. Resistant to verticillium, fusarium and TMV disease resistant"
+    },
+    {
+      "id": "seed-09hk7q",
+      "crop": "Tomato",
+      "variety": "Rapunzel",
+      "family": "solanaceae",
+      "sowIndoors": {
+        "from": 2,
+        "to": 3
+      },
+      "sowOutdoors": {
+        "from": 4,
+        "to": 4
+      },
+      "harvest": {
+        "from": 7,
+        "to": 11
+      },
+      "depth": "6mm",
+      "inStock": true,
+      "notes": "Sow Feb/March for greenhouse growing or April for outdoor growing. Transplant seedlings singly into 7.5cm pots, then into large pots or greenhouse border. Support with a cane and remove side shoots regularly."
     }
   ],
   "sowings": [
@@ -276,29 +318,6 @@
       "notes": "Bought as large plugs, then planted out",
       "qty": 9,
       "destinationAreaId": "bed-1-left"
-    },
-    {
-      "id": "sow-tomato-2026",
-      "seedId": "tomato-gardeners-delight",
-      "crop": "Tomato",
-      "variety": "Gardener's Delight",
-      "family": "solanaceae",
-      "sownDate": "2026-03-01",
-      "location": "greenhouse",
-      "underGlass": true,
-      "stage": "potted-on",
-      "notes": "Staying in the home greenhouse to fruit."
-    },
-    {
-      "id": "sow-9tg1sm",
-      "seedId": "tomato-gardeners-delight",
-      "crop": "Tomato",
-      "variety": "Gardener's Delight",
-      "family": "solanaceae",
-      "sownDate": "2026-03-18",
-      "location": "greenhouse",
-      "underGlass": true,
-      "stage": "potted-on"
     },
     {
       "id": "sow-koffrh",
@@ -322,6 +341,45 @@
       "underGlass": true,
       "stage": "germinated",
       "qty": 12
+    },
+    {
+      "id": "sow-l516sl",
+      "seedId": "seed-179ix0",
+      "crop": "Asparagus",
+      "variety": "Mary Washington",
+      "family": "apiaceae",
+      "sownDate": "2026-06-10",
+      "location": "greenhouse",
+      "underGlass": true,
+      "stage": "planted-out",
+      "qty": 22,
+      "destinationAreaId": "bed-asparagus",
+      "plantedOutDate": "2026-07-12",
+      "expectedHarvestFrom": "2029-06-06"
+    },
+    {
+      "id": "sow-7gxu83",
+      "seedId": "seed-h79j45",
+      "crop": "Tomato",
+      "variety": "Sweet success",
+      "family": "solanaceae",
+      "sownDate": "2026-04-02",
+      "location": "greenhouse",
+      "underGlass": true,
+      "stage": "sown",
+      "qty": 3
+    },
+    {
+      "id": "sow-xzivqd",
+      "seedId": "seed-09hk7q",
+      "crop": "Tomato",
+      "variety": "Rapunzel",
+      "family": "solanaceae",
+      "sownDate": "2026-04-02",
+      "location": "greenhouse",
+      "underGlass": true,
+      "stage": "sown",
+      "qty": 3
     }
   ]
 }
