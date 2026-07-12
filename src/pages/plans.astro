@@ -110,15 +110,93 @@ const rotation = [
     </ol>
   </div>
 
-  <div class="soon card">
-    <span class="pill">coming soon</span>
-    <p>
-      An interactive planner: pick a crop for a bed and get instant flags — “you grew
-      brassicas here last year” — plus companion suggestions, all from the family and
-      year data already recorded against each planting.
-    </p>
-  </div>
+  <h2 class="section-title" id="ns-title">Next season</h2>
+  <p class="ns-intro">
+    Assumes the same bed layout. For each bed: what grew there this season (plantings
+    <em>and</em> planted-out sowings), and what rotation suggests should follow — with
+    matching packets from your seed bank where you have them.
+  </p>
+  <ul id="ns-grid" class="grid"></ul>
 </Base>
+
+<script>
+  import areasData from '../data/areas.json';
+  import seedsData from '../data/seeds.json';
+  import { overlayLoad, scopeStamp } from '../lib/datastore';
+
+  const FAMILY_LABEL = {
+    brassica: 'Brassicas', legume: 'Legumes', allium: 'Alliums', solanaceae: 'Potato family',
+    apiaceae: 'Roots / umbellifers', cucurbit: 'Cucurbits', chenopod: 'Beets & chard',
+    asparagus: 'Asparagus', 'cane-fruit': 'Cane fruit', 'bush-fruit': 'Bush fruit',
+    'tree-fruit': 'Tree fruit', rhubarb: 'Rhubarb', flower: 'Flowers', other: 'Other',
+  };
+  const PERENNIAL = new Set(['asparagus', 'cane-fruit', 'bush-fruit', 'tree-fruit', 'rhubarb']);
+  /** What follows what in a four-course rotation. */
+  const NEXT = {
+    legume: ['brassica'],
+    brassica: ['apiaceae', 'allium', 'chenopod'],
+    apiaceae: ['solanaceae', 'cucurbit'],
+    allium: ['solanaceae', 'cucurbit'],
+    chenopod: ['solanaceae', 'cucurbit'],
+    solanaceae: ['legume'],
+    cucurbit: ['legume'],
+  };
+  const GENERIC = {
+    legume: 'peas, broad beans, French/runner beans', brassica: 'cabbage, kale, PSB, sprouts, cauliflower',
+    apiaceae: 'carrots, parsnips, celeriac', allium: 'onions, garlic, leeks',
+    chenopod: 'beetroot, chard, spinach', solanaceae: 'potatoes, tomatoes', cucurbit: 'courgette, squash, cucumber',
+  };
+
+  const seeds = overlayLoad('allotment:seeds:v1', seedsData); // live sowings + packets
+  const nextYear = new Date().getFullYear() + 1;
+  document.getElementById('ns-title').textContent = `Next season (${nextYear})`;
+
+  const grid = document.getElementById('ns-grid');
+  const stamp = scopeStamp(grid);
+  const beds = areasData.areas.filter((a) => a.type === 'bed' || a.type === 'unused');
+
+  for (const bed of beds) {
+    const grown = new Map(); // family -> crop names grown there this season
+    for (const p of bed.plantings || []) { if (!grown.has(p.family)) grown.set(p.family, []); grown.get(p.family).push(p.crop); }
+    for (const s of seeds.sowings || []) {
+      if (s.stage === 'planted-out' && s.destinationAreaId === bed.id) { if (!grown.has(s.family)) grown.set(s.family, []); grown.get(s.family).push(s.crop); }
+    }
+
+    const li = document.createElement('li'); li.className = 'card bed';
+    const h = document.createElement('h3'); h.textContent = bed.name; li.append(h);
+
+    const grownP = document.createElement('p'); grownP.className = 'ns-grown';
+    grownP.textContent = grown.size
+      ? 'This season: ' + [...grown.entries()].map(([f, crops]) => `${[...new Set(crops)].join(', ')} (${FAMILY_LABEL[f] || f})`).join(' · ')
+      : 'This season: nothing recorded — open ground.';
+    li.append(grownP);
+
+    const annualFams = [...grown.keys()].filter((f) => !PERENNIAL.has(f));
+    const perennialOnly = grown.size > 0 && annualFams.length === 0;
+    const sug = document.createElement('div'); sug.className = 'ns-sug';
+    if (perennialOnly) {
+      sug.textContent = `${nextYear}: perennial — stays put, outside the rotation.`;
+    } else {
+      const suggested = new Set();
+      if (annualFams.length === 0) { suggested.add('legume'); suggested.add('solanaceae'); } // opener for empty ground
+      else for (const f of annualFams) for (const n of NEXT[f] || ['legume']) suggested.add(n);
+      for (const f of annualFams) suggested.delete(f); // don't repeat this year's family
+      const head = document.createElement('strong'); head.textContent = `${nextYear}: ` + [...suggested].map((f) => FAMILY_LABEL[f] || f).join(' or ');
+      sug.append(head);
+      for (const f of suggested) {
+        const packets = (seeds.seeds || []).filter((s) => s.family === f && s.inStock !== false);
+        const line = document.createElement('span'); line.className = 'ns-line';
+        line.textContent = packets.length
+          ? `${FAMILY_LABEL[f]}: from your seed bank — ${packets.map((p) => p.crop + (p.variety ? ` ‘${p.variety}’` : '')).join(', ')}`
+          : `${FAMILY_LABEL[f]}: nothing in your seed bank yet — e.g. ${GENERIC[f]}`;
+        sug.append(line);
+      }
+    }
+    li.append(sug);
+    grid.append(li);
+  }
+  stamp(grid);
+</script>
 
 <style>
   .banner {
@@ -281,18 +359,31 @@ const rotation = [
     z-index: 1;
   }
 
-  .soon {
-    padding: 1.1rem 1.3rem;
+  .ns-intro {
+    margin: -0.3rem 0 1rem;
+    color: var(--muted);
+    max-width: 64ch;
+    font-size: 0.92rem;
+  }
+  .ns-grown {
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+  }
+  .ns-sug {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    align-items: flex-start;
-    border-style: dashed;
+    gap: 0.25rem;
+    background: var(--green-100);
+    border-radius: 8px;
+    padding: 0.55rem 0.7rem;
+    font-size: 0.88rem;
   }
-  .soon p {
-    margin: 0;
+  .ns-sug strong {
+    color: var(--green-700);
+  }
+  .ns-line {
     color: var(--ink-soft);
-    max-width: 64ch;
   }
 
   @media (max-width: 560px) {
