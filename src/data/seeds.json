@@ -118,6 +118,147 @@
       "spacing": "75cm",
       "depth": "2.5cm",
       "inStock": true
+    },
+    {
+      "id": "seed-lmxuyt",
+      "crop": "Kale",
+      "variety": "Nero di Toscana",
+      "family": "brassica",
+      "sowIndoors": {
+        "from": 3,
+        "to": 5
+      },
+      "sowOutdoors": {
+        "from": 4,
+        "to": 9
+      },
+      "harvest": {
+        "from": 6,
+        "to": 4
+      },
+      "spacing": "30cm apart, thin to 10cm for cut and come again",
+      "depth": "lightly covered with fine soil",
+      "inStock": true,
+      "notes": "Traditional heritage variety with dark leaves. Very winter hardy, use for 'cut and come again' baby leaves."
+    },
+    {
+      "id": "seed-vz1mq9",
+      "crop": "Cauliflower",
+      "variety": "Veronica F1 Hybrid",
+      "family": "brassica",
+      "sowIndoors": {
+        "from": 1,
+        "to": 4
+      },
+      "sowOutdoors": {
+        "from": 3,
+        "to": 5
+      },
+      "harvest": {
+        "from": 7,
+        "to": 11
+      },
+      "spacing": "45cm between plants in row, 60cm between rows",
+      "depth": "6mm or 13mm",
+      "inStock": true,
+      "notes": "Sow in individual pots or seed tray, cover with 6mm compost. Transplant seedlings when large enough, around 5 weeks from sowing. Plant firmly and water well until established."
+    },
+    {
+      "id": "seed-kji205",
+      "crop": "Courgette",
+      "variety": "Orelia F1 Hybrid",
+      "family": "cucurbit",
+      "sowIndoors": {
+        "from": 3,
+        "to": 5
+      },
+      "sowOutdoors": {
+        "from": 5,
+        "to": 7
+      },
+      "harvest": {
+        "from": 7,
+        "to": 10
+      },
+      "spacing": "75cm",
+      "depth": "2.5cm",
+      "inStock": true,
+      "notes": "Virtually spine-free stems for easy picking. Powdery mildew tolerant until late in the season."
+    },
+    {
+      "id": "seed-u85p2y",
+      "crop": "Swiss Chard Bright Lights",
+      "family": "chenopod",
+      "sowOutdoors": {
+        "from": 3,
+        "to": 10
+      },
+      "harvest": {
+        "from": 6,
+        "to": 12
+      },
+      "spacing": "thin to 23cm (9in) apart",
+      "depth": "1cm (1/2 in)",
+      "inStock": true,
+      "notes": "Rainbow-coloured stems, ready to use within 60 days of sowing. Harvest stems as required, picking only a few from each plant."
+    },
+    {
+      "id": "seed-w4wygs",
+      "crop": "Leek",
+      "variety": "Autumn H",
+      "family": "allium",
+      "sowIndoors": {
+        "from": 1,
+        "to": 3
+      },
+      "harvest": {
+        "from": 8,
+        "to": 12
+      },
+      "spacing": "15cm",
+      "depth": "1.5cm",
+      "inStock": true,
+      "notes": "Seelings suitable for planting when about 150mm tall. For extended winter harvesting, sow in succession at fortnightly intervals."
+    },
+    {
+      "id": "seed-q74jnw",
+      "crop": "Radish",
+      "variety": "Misato Rose Flesh",
+      "family": "other",
+      "sowIndoors": {
+        "from": 1,
+        "to": 12
+      },
+      "sowOutdoors": {
+        "from": 3,
+        "to": 10
+      },
+      "harvest": {
+        "from": 5,
+        "to": 11
+      },
+      "spacing": "2.5cm (1in)",
+      "depth": "1cm (½in)",
+      "inStock": true,
+      "notes": "Sow thinly in broad drills in soil raked to fine tilth. Thin as necessary and keep watered to prevent bolting."
+    },
+    {
+      "id": "seed-tun936",
+      "crop": "Radish Blue Candle F1",
+      "variety": "Blue Candle F1",
+      "family": "other",
+      "sowOutdoors": {
+        "from": 6,
+        "to": 7
+      },
+      "harvest": {
+        "from": 8,
+        "to": 12
+      },
+      "spacing": "thin to 2.5cm (1in) apart",
+      "depth": "1cm (1/2in)",
+      "inStock": true,
+      "notes": "Quick to grow with excellent tolerance to bolting. Peppery flavoured purple coloured flesh, great for soups, stews, salads and kimchi."
     }
   ],
   "sowings": [
@@ -156,6 +297,29 @@
       "location": "greenhouse",
       "underGlass": true,
       "stage": "sown"
+    },
+    {
+      "id": "sow-koffrh",
+      "seedId": "seed-lmxuyt",
+      "crop": "Kale",
+      "variety": "Nero di Toscana",
+      "family": "brassica",
+      "sownDate": "2026-07-05",
+      "location": "greenhouse",
+      "underGlass": true,
+      "stage": "sown",
+      "qty": 40
+    },
+    {
+      "id": "sow-o05wrt",
+      "seedId": "seed-u85p2y",
+      "crop": "Swiss Chard Bright Lights",
+      "family": "chenopod",
+      "sownDate": "2026-07-05",
+      "location": "greenhouse",
+      "underGlass": true,
+      "stage": "sown",
+      "qty": 12
     }
   ]
 }
