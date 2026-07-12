@@ -73,6 +73,18 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
 
   </div>
 
+  <div id="offplot" class="offplot" hidden>
+    <span class="offplot__label">Off the plot</span>
+    <button id="gh-card" class="offplot__card" type="button">
+      <span class="offplot__icon">🏡</span>
+      <span class="offplot__body">
+        <strong>Home greenhouse</strong>
+        <span id="gh-meta" class="offplot__meta"></span>
+      </span>
+      <img id="gh-thumb" class="offplot__thumb" alt="" hidden />
+    </button>
+  </div>
+
   <div id="area-view" class="area-view" role="dialog" aria-modal="true" hidden>
     <header class="av-bar">
       <button id="av-back" class="ctl ctl--ghost" type="button">← Overview</button>
@@ -309,7 +321,10 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   const markersInArea = (a) => markers.filter((m) => m.x >= a.shape.x && m.x <= a.shape.x + a.shape.w && m.y >= a.shape.y && m.y <= a.shape.y + a.shape.h);
 
   // ---- render areas ------------------------------------------------------
-  function renderAreas() { areaLayer.replaceChildren(); areaNodes.clear(); areas.forEach((a, i) => renderArea(a, i + 1)); updatePlantCounts(); }
+  // Off-plot places (the home greenhouse) get their own framed card below the
+  // map instead of a rectangle on the aerial photo.
+  const OFF_PLOT = new Set(['home-greenhouse']);
+  function renderAreas() { areaLayer.replaceChildren(); areaNodes.clear(); areas.filter((a) => !OFF_PLOT.has(a.id)).forEach((a, i) => renderArea(a, i + 1)); updatePlantCounts(); }
   function renderArea(area, number) {
     const c = colorFor(area), s = area.shape;
     const g = el('g', { class: 'area', 'data-id': area.id });
@@ -474,6 +489,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     info.append(tags);
     if (area.notes) { const p = document.createElement('p'); p.className = 'notes'; p.textContent = area.notes; info.append(p); }
     info.append(buildJournal(area));
+    if (OFF_PLOT.has(area.id)) return; // no map plants/arranging for off-plot places
     const inArea = markersInArea(area);
     {
       const hh = document.createElement('h3'); hh.textContent = 'Plants here'; info.append(hh);
@@ -965,6 +981,21 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   const legendList = document.getElementById('legend-list');
   for (const [, m] of Object.entries(TYPE_META)) { const li = document.createElement('li'); const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = m.color; li.append(sw, document.createTextNode(m.label)); legendList.append(li); }
 
+  // off-plot card (home greenhouse)
+  {
+    const gh = areas.find((a) => a.id === 'home-greenhouse');
+    const wrap = document.getElementById('offplot');
+    if (gh && wrap) {
+      wrap.hidden = false;
+      const photos = (gh.events || []).filter((e) => e.kind === 'photo' && e.photo).sort((a, b) => a.date.localeCompare(b.date));
+      document.getElementById('gh-meta').textContent = photos.length
+        ? `${photos.length} photo${photos.length === 1 ? '' : 's'} · tap to open the journal`
+        : 'tap to open the journal';
+      if (photos.length) { const t = document.getElementById('gh-thumb'); t.src = `${base}/${photos[photos.length - 1].photo.src}`; t.hidden = false; }
+      document.getElementById('gh-card').addEventListener('click', () => openOverlay('home-greenhouse'));
+    }
+  }
+
   renderAreas(); renderMarkers(); refreshSelection(); refreshChrome(); renderInfo(); updateSaveState();
   // Deep link: #<area-id> selects that area on load.
   const hashId = decodeURIComponent(location.hash.replace(/^#/, ''));
@@ -1012,6 +1043,15 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   .recon { position: absolute; left: 0.6rem; right: 0.6rem; bottom: 5rem; z-index: 6; font-size: 0.74rem; line-height: 1.35; background: color-mix(in srgb, #fff7e6 92%, transparent); border: 1px solid #ecd9a8; color: #6b5310; border-radius: 10px; padding: 0.35rem 0.6rem; backdrop-filter: blur(4px); }
 
   #plot-svg.zoomed-in image { clip-path: none; }
+
+  .offplot { margin-top: 0.6rem; display: flex; align-items: center; gap: 0.7rem; }
+  .offplot__label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .offplot__card { flex: 1; max-width: 26rem; display: flex; align-items: center; gap: 0.7rem; font: inherit; text-align: left; cursor: pointer; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.6rem 0.8rem; box-shadow: var(--shadow-sm); }
+  .offplot__card:hover { border-color: var(--green); }
+  .offplot__icon { font-size: 1.6rem; }
+  .offplot__body { flex: 1; display: flex; flex-direction: column; gap: 0.05rem; }
+  .offplot__meta { font-size: 0.78rem; color: var(--muted); }
+  .offplot__thumb { width: 3rem; height: 3rem; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
   .map-stage:has(.plant-bar:not([hidden])) .map-controls { bottom: 4.6rem; }
   :global(body.plot-fs) .marker-pop { bottom: 4.9rem; }
 
