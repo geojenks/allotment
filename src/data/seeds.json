@@ -348,13 +348,13 @@
       "crop": "Asparagus",
       "variety": "Mary Washington",
       "family": "apiaceae",
-      "sownDate": "2026-06-10",
+      "sownDate": "2026-05-12",
       "location": "greenhouse",
       "underGlass": true,
       "stage": "planted-out",
       "qty": 22,
       "destinationAreaId": "bed-asparagus",
-      "plantedOutDate": "2026-07-12",
+      "plantedOutDate": "2026-06-10",
       "expectedHarvestFrom": "2029-06-06"
     },
     {
