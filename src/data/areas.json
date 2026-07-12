@@ -434,38 +434,6 @@
       "r": 1.53
     },
     {
-      "id": "m-rhspdx",
-      "icon": "🌱",
-      "label": "Seedling",
-      "x": 108.753,
-      "y": 109.841,
-      "r": 2.5
-    },
-    {
-      "id": "m-l6wgz8",
-      "icon": "🍓",
-      "label": "Cabbage",
-      "x": 115.858,
-      "y": 110.5,
-      "r": 1
-    },
-    {
-      "id": "m-qrww2p",
-      "icon": "🌱",
-      "label": "Seedling",
-      "x": 109.224,
-      "y": 114.298,
-      "r": 2.5
-    },
-    {
-      "id": "m-0hxuak",
-      "icon": "🌱",
-      "label": "Seedling",
-      "x": 108.735,
-      "y": 112.157,
-      "r": 2.5
-    },
-    {
       "id": "m-ujriqk",
       "icon": "🌾",
       "label": "Asparagus",
