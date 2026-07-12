@@ -55,6 +55,7 @@ import Base from '../layouts/Base.astro';
   import { scopeStamp, PLOT_LOCATION, getToken, commitFiles, overlayLoad, overlaySave, overlayClear, uid, todayStr } from '../lib/datastore';
 
   const stamp = scopeStamp(document.getElementById('grid'));
+  const SITE_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   const CATS = {
     sow: { label: 'Sow', color: '#5f8a36', emoji: '🌱' },
@@ -334,6 +335,10 @@ import Base from '../layouts/Base.astro';
       const tt = document.createElement('strong'); tt.textContent = e.title; body.append(tt);
       if (e.area) { const ar = document.createElement('span'); ar.className = 'muted small'; ar.textContent = e.area; body.append(ar); }
       if (e.detail) { const d = document.createElement('span'); d.className = 'small'; d.textContent = e.detail; body.append(d); }
+      const links = document.createElement('span'); links.className = 'day-links';
+      if (e.areaId) { const a = document.createElement('a'); a.href = `${SITE_BASE}/#${e.areaId}`; a.textContent = 'open bed →'; links.append(a); }
+      if (!e.logId && (e.cat === 'sow' || e.cat === 'plant' || e.cat === 'harvest')) { const a = document.createElement('a'); a.href = `${SITE_BASE}/pipeline`; a.textContent = 'pipeline →'; links.append(a); }
+      if (links.childNodes.length) body.append(links);
       row.append(tag, body);
       if (e.logId) {
         const del = document.createElement('button'); del.type = 'button'; del.className = 'day-del'; del.textContent = '✕'; del.title = 'Delete this diary entry';
@@ -408,6 +413,8 @@ import Base from '../layouts/Base.astro';
   .day-ev__body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
   .day-ev__body strong { font-size: 0.95rem; overflow-wrap: anywhere; }
   .day-del { flex-shrink: 0; font: inherit; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); border-radius: 6px; padding: 0.15rem 0.45rem; }
+  .day-links { display: flex; gap: 0.7rem; font-size: 0.8rem; margin-top: 0.1rem; }
+  .day-links a { font-weight: 600; text-decoration: none; }
   .day-add { display: flex; flex-direction: column; gap: 0.4rem; border-top: 1px solid var(--line); padding-top: 0.7rem; margin-top: 0.2rem; }
   .day-add h4 { margin: 0; font-size: 0.85rem; color: var(--green-700); }
   .day-add select, .day-add input { font: inherit; font-size: 1rem; color: var(--ink); padding: 0.45rem 0.55rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; }

@@ -24,6 +24,7 @@ import Base from '../layouts/Base.astro';
     <span class="key key--soon">due soon</span>
     <span class="key key--late">overdue</span>
     <span class="key key--harvest">pick now</span>
+    <button id="add-bought" class="ctl" type="button">🛒 Add bought plants</button>
   </div>
 
   <div id="crops" class="cropstrip"></div>
@@ -57,10 +58,32 @@ import Base from '../layouts/Base.astro';
 <script>
   import seedsData from '../data/seeds.json';
   import areasData from '../data/areas.json';
-  import { getToken, commitFiles, overlayLoad, overlaySave, overlayClear, todayStr, scopeStamp } from '../lib/datastore';
+  import { getToken, commitFiles, overlayLoad, overlaySave, overlayClear, uid, todayStr, scopeStamp } from '../lib/datastore';
 
   const KEY = 'allotment:seeds:v1';
   const PATH = 'src/data/seeds.json';
+  const SITE_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const FAMILIES = [
+    ['brassica', 'Brassicas'], ['legume', 'Legumes'], ['allium', 'Alliums'],
+    ['solanaceae', 'Potato family'], ['apiaceae', 'Umbellifers'], ['cucurbit', 'Cucurbits'],
+    ['chenopod', 'Beets & chard'], ['other', 'Other / herb'], ['flower', 'Flowers'],
+  ];
+  // Generic knowledge for plants bought as plugs (no packet to read).
+  const FAM_GUESS = [
+    [/cauli|cabbage|savoy|broccoli|psb|kale|sprout|swede|turnip|radish/i, 'brassica'],
+    [/pea|bean/i, 'legume'], [/onion|garlic|leek|shallot/i, 'allium'],
+    [/potato|tomato|pepper|chilli|aubergine/i, 'solanaceae'],
+    [/carrot|parsnip|celeriac|celery|fennel/i, 'apiaceae'],
+    [/courgette|squash|pumpkin|cucumber|marrow/i, 'cucurbit'],
+    [/beetroot|chard|spinach/i, 'chenopod'], [/flower|dahlia|marigold/i, 'flower'],
+  ];
+  const guessFam = (name) => { for (const [re, f] of FAM_GUESS) if (re.test(name)) return f; return 'other'; };
+  const WEEKS_GUESS = [
+    [/psb|purple sprouting/i, 32], [/sprout/i, 22], [/celeriac/i, 20], [/leek/i, 18], [/onion|garlic/i, 16],
+    [/cauli|squash|pumpkin/i, 14], [/savoy|cabbage/i, 13], [/broccoli/i, 11], [/tomato/i, 9],
+    [/kale|bean|pea/i, 8], [/courgette/i, 7], [/lettuce|salad/i, 5],
+  ];
+  const guessWeeks = (name) => { for (const [re, w] of WEEKS_GUESS) if (re.test(name)) return w; return 12; };
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const STAGES = [
     ['sown', 'Sown'], ['germinated', 'Germinated'], ['potted-on', 'Potted on'],
@@ -270,6 +293,29 @@ import Base from '../layouts/Base.astro';
     const h = document.createElement('h3'); h.textContent = cropTitle(s); detailForm.append(h);
     const story = document.createElement('p'); story.className = 'story'; story.textContent = storyOf(s).replace(/^f/, 'F') + '.'; detailForm.append(story);
 
+    // Progress photos: shots of its bed taken while this sowing has been in it.
+    if (s.destinationAreaId) {
+      const area = areasData.areas.find((a) => a.id === s.destinationAreaId);
+      const since = s.plantedOutDate || (!s.underGlass ? s.sownDate : null);
+      const shots = area && since
+        ? (area.events || []).filter((e) => e.kind === 'photo' && e.photo && e.date >= since).sort((a, b) => a.date.localeCompare(b.date))
+        : [];
+      const prog = document.createElement('div'); prog.className = 'progress';
+      if (shots.length) {
+        const row = document.createElement('div'); row.className = 'progress__row';
+        for (const ev of shots.slice(-6)) {
+          const a = document.createElement('a'); a.href = `${SITE_BASE}/#${s.destinationAreaId}`;
+          const img = document.createElement('img'); img.src = `${SITE_BASE}/${ev.photo.src}`; img.alt = ev.date; img.loading = 'lazy'; img.title = ev.date;
+          a.append(img); row.append(a);
+        }
+        prog.append(row);
+      }
+      const link = document.createElement('a'); link.className = 'progress__link'; link.href = `${SITE_BASE}/#${s.destinationAreaId}`;
+      link.textContent = shots.length ? `See progress in ${areaName(s.destinationAreaId) || 'the bed'} →` : `Open ${areaName(s.destinationAreaId) || 'the bed'} (no photos since planting yet) →`;
+      prog.append(link);
+      detailForm.append(prog);
+    }
+
     const sown = document.createElement('input'); sown.type = 'date'; sown.value = s.sownDate; sown.max = todayStr();
     sown.addEventListener('change', () => { if (sown.value) { s.sownDate = sown.value; save(); } });
     detailForm.append(field('Sown', sown));
@@ -328,6 +374,54 @@ import Base from '../layouts/Base.astro';
     stamp(detailForm); if (!detail.open) detail.showModal();
   }
 
+  // ---- bought plants: plugs / started plants with no packet ----------------
+  function openBought() {
+    detailForm.replaceChildren();
+    const h = document.createElement('h3'); h.textContent = '🛒 Add bought plants'; detailForm.append(h);
+    const intro = document.createElement('p'); intro.className = 'story';
+    intro.textContent = 'For plugs or started plants (no seed packet). Family and harvest timing are guessed from the name — check them before saving.';
+    detailForm.append(intro);
+    const crop = document.createElement('input'); crop.type = 'text'; crop.placeholder = 'e.g. Cauliflower'; detailForm.append(field('Plant', crop));
+    const variety = document.createElement('input'); variety.type = 'text'; detailForm.append(field('Variety (optional)', variety));
+    const qty = document.createElement('input'); qty.type = 'number'; qty.min = '1'; qty.inputMode = 'numeric'; qty.placeholder = 'e.g. 6'; detailForm.append(field('How many', qty));
+    const fam = document.createElement('select');
+    for (const [v, l] of FAMILIES) { const o = document.createElement('option'); o.value = v; o.textContent = l; fam.append(o); }
+    let famTouched = false;
+    fam.addEventListener('change', () => { famTouched = true; });
+    crop.addEventListener('input', () => { if (!famTouched) fam.value = guessFam(crop.value); });
+    detailForm.append(field('Family', fam, 'guessed from the name — used for rotation and defaults'));
+    const date = document.createElement('input'); date.type = 'date'; date.value = todayStr(); date.max = todayStr(); detailForm.append(field('Date planted', date));
+    const where = document.createElement('select');
+    where.append(new Option('Straight into a bed', 'bed'), new Option('Nursery / greenhouse first', 'nursery'));
+    detailForm.append(field('Where did they go?', where));
+    const dest = document.createElement('select');
+    dest.append(new Option('— choose bed —', ''));
+    for (const a of areasData.areas) dest.append(new Option(a.name, a.id));
+    detailForm.append(field('Bed', dest));
+
+    const menu = document.createElement('div'); menu.className = 'dialog__menu';
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'ctl ctl--ghost'; cancel.textContent = 'Cancel'; cancel.addEventListener('click', () => detail.close());
+    const ok = document.createElement('button'); ok.type = 'submit'; ok.className = 'ctl ctl--primary'; ok.textContent = 'Add';
+    menu.append(cancel, ok); detailForm.append(menu);
+    detailForm.onsubmit = () => {
+      const name = crop.value.trim(); if (!name) return;
+      const d = date.value || todayStr();
+      const direct = where.value === 'bed';
+      data.sowings.push({
+        id: uid('sow-'), crop: name, variety: variety.value.trim() || undefined, family: fam.value,
+        sownDate: d, location: direct ? 'outdoor' : 'greenhouse', underGlass: !direct,
+        stage: direct ? 'planted-out' : 'potted-on', plantedOutDate: direct ? d : undefined,
+        qty: qty.value ? Math.max(1, Math.round(+qty.value)) : undefined,
+        destinationAreaId: dest.value || undefined,
+        expectedHarvestFrom: addDays(d, guessWeeks(name) * 7), // generic guess, pinned — edit on the card
+        notes: 'Bought as plants',
+      });
+      save(); render();
+    };
+    stamp(detailForm); if (!detail.open) detail.showModal();
+  }
+  document.getElementById('add-bought').addEventListener('click', openBought);
+
   // ---- publish ----------------------------------------------------------------
   document.getElementById('publish').addEventListener('click', async () => {
     const token = await getToken(); if (!token) return;
@@ -355,7 +449,12 @@ import Base from '../layouts/Base.astro';
   .danger { font: inherit; font-weight: 600; cursor: pointer; border: 1px solid #e3b8b0; color: #a23b2b; background: var(--panel); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); margin-right: auto; }
 
   /* status colours used by cards, pills and the key */
-  .keyrow { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.9rem; }
+  .keyrow { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.9rem; }
+  .keyrow .ctl { margin-left: auto; }
+  .progress { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.4rem; }
+  .progress__row { display: flex; gap: 0.35rem; overflow-x: auto; }
+  .progress__row img { width: 3.4rem; height: 3.4rem; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); flex-shrink: 0; }
+  .progress__link { font-size: 0.85rem; font-weight: 600; text-decoration: none; }
   .key { font-size: 0.74rem; font-weight: 600; border-radius: 999px; padding: 0.16rem 0.6rem; border: 1px solid; }
   .key--ok { color: var(--green-700); border-color: color-mix(in srgb, var(--green) 40%, white); background: var(--green-100); }
   .key--soon { color: #8a6210; border-color: #ecd9a8; background: #faf3dd; }
