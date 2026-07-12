@@ -52,6 +52,7 @@ import Base from '../layouts/Base.astro';
   import areasData from '../data/areas.json';
   import seedsData from '../data/seeds.json';
   import logData from '../data/log.json';
+  import plansData from '../data/plans.json';
   import { scopeStamp, PLOT_LOCATION, getToken, commitFiles, overlayLoad, overlaySave, overlayClear, uid, todayStr } from '../lib/datastore';
 
   const stamp = scopeStamp(document.getElementById('grid'));
@@ -108,6 +109,17 @@ import Base from '../layouts/Base.astro';
     }
     for (const en of log.entries ?? []) {
       push({ date: en.date, cat: en.category, title: en.title || (CATS[en.category] || CATS.job).label, areaId: en.areaId || '', area: en.areaId ? areaName(en.areaId) || '' : '', crop: '', detail: en.notes, logId: en.id });
+    }
+    // bed plans (Plans page): back-propagated sow-by + plant-out reminders
+    const NW = { brassica: 6, legume: 3, allium: 9, solanaceae: 8, apiaceae: 5, cucurbit: 4, chenopod: 4, other: 6, flower: 6 };
+    const plans = overlayLoad('allotment:plans:v1', plansData);
+    const fmtLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    for (const p of plans.plans ?? []) {
+      const what = p.crops?.length ? p.crops.join(', ') : p.family;
+      const bed = areaName(p.areaId) || '';
+      push({ date: p.from + '-01', cat: 'plant', title: `Plan: ${what}`, areaId: p.areaId, area: bed, crop: '', detail: 'planned plant-out (approximate)' });
+      const sowBy = new Date(p.from + '-01T00:00:00'); sowBy.setDate(sowBy.getDate() - (NW[p.family] ?? 6) * 7);
+      push({ date: fmtLocal(sowBy), cat: 'sow', title: `Plan: sow ${what}`, areaId: p.areaId, area: bed, crop: '', detail: `~${NW[p.family] ?? 6} wks under glass, planting out ${p.from} in ${bed}` });
     }
   }
   buildEvents();

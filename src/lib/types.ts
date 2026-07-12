@@ -88,6 +88,26 @@ export interface LogData {
   entries: LogEntry[];
 }
 
+/**
+ * A bed "painted" with a family for part of the season (the visual planner).
+ * `from` is the target plant-out month, `to` the expected clear month — both
+ * 'YYYY-MM'. Sow-by dates are derived (plant-out minus typical nursery weeks).
+ */
+export interface BedPlan {
+  id: string;
+  areaId: string;
+  family: CropFamily;
+  crops?: string[]; // shortlist of crops you fancy growing
+  from: string; // 'YYYY-MM'
+  to: string; // 'YYYY-MM'
+  notes?: string;
+}
+
+/** The whole plans file: src/data/plans.json. */
+export interface PlanData {
+  plans: BedPlan[];
+}
+
 export interface PlotTask {
   title: string; // e.g. "Net the PSB against pigeons"
   category?: JobCategory; // defaults to 'job'

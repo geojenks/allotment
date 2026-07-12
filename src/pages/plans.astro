@@ -36,13 +36,21 @@ const rotation = [
 
 <Base title="Allotment — Plans" active="plans">
   <header class="page-head">
-    <p class="eyebrow">What goes where</p>
+    <p class="eyebrow">What goes where, and when</p>
     <h1>Plans</h1>
     <p>
-      Plan future planting by bed. Below is what's there now and what's free; a
-      rotation &amp; companion helper is on the way to flag good and bad follow-ons.
+      Each bed across the next 18 months. Solid bars are what's really growing (from the
+      pipeline); striped bars are plans — paint a bed with a family and a shortlist, and
+      sow-by reminders appear below and on the calendar.
     </p>
   </header>
+
+  <div id="bar" class="savebar" hidden>
+    <span class="savebar__label">Unsaved plans</span>
+    <button id="publish" class="ctl ctl--primary" type="button">Save to website</button>
+    <button id="discard" class="ctl ctl--ghost" type="button">Discard</button>
+    <span id="bar-status" class="savebar__status"></span>
+  </div>
 
   <div class="banner card">
     <div>
@@ -54,38 +62,13 @@ const rotation = [
     </div>
   </div>
 
-  <h2 class="section-title">Beds</h2>
-  <ul class="grid">
-    {
-      beds.map((b) => {
-        const fams = familyOf(b);
-        const free = fams.length === 0;
-        return (
-          <li class:list={['card bed', { 'bed--free': free }]}>
-            <div class="bed__top">
-              <h3>{b.name}</h3>
-              <span class:list={['tag', free ? 'tag--free' : 'tag--full']}>
-                {free ? 'Free' : 'Planted'}
-              </span>
-            </div>
-            {b.plantings && b.plantings.length > 0 ? (
-              <ul class="crops">
-                {b.plantings.map((p) => (
-                  <li>
-                    <span class="crop">{p.crop}</span>
-                    <span class="fam">{FAMILY_LABEL[p.family] ?? p.family}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p class="bed__free">Open ground — ready for this season's plan.</p>
-            )}
-            {b.notes && <p class="bed__note">{b.notes}</p>}
-          </li>
-        );
-      })
-    }
-  </ul>
+  <h2 class="section-title">Season timeline</h2>
+  <div class="tl-wrap">
+    <div id="tl" class="tl"></div>
+  </div>
+  <div id="reminders" class="reminders"></div>
+
+  <dialog id="plan-dialog" class="dialog"><form id="plan-form" method="dialog"></form></dialog>
 
   <div class="rotation card">
     <div class="rotation__head">
@@ -122,7 +105,8 @@ const rotation = [
 <script>
   import areasData from '../data/areas.json';
   import seedsData from '../data/seeds.json';
-  import { overlayLoad, scopeStamp } from '../lib/datastore';
+  import plansData from '../data/plans.json';
+  import { overlayLoad, overlaySave, overlayClear, getToken, commitFiles, uid, scopeStamp } from '../lib/datastore';
 
   const FAMILY_LABEL = {
     brassica: 'Brassicas', legume: 'Legumes', allium: 'Alliums', solanaceae: 'Potato family',
@@ -147,9 +131,197 @@ const rotation = [
     chenopod: 'beetroot, chard, spinach', solanaceae: 'potatoes, tomatoes', cucurbit: 'courgette, squash, cucumber',
   };
 
+  const FAM_COLORS = {
+    brassica: '#4a7c3f', legume: '#2f7d5a', allium: '#8a5fb0', solanaceae: '#c05a3a',
+    apiaceae: '#d9922b', cucurbit: '#9c9b2e', chenopod: '#a04f7c', other: '#64748b', flower: '#c26a9a',
+    asparagus: '#7a8a5a', 'cane-fruit': '#7a8a5a', 'bush-fruit': '#7a8a5a', 'tree-fruit': '#7a8a5a', rhubarb: '#7a8a5a',
+  };
+  const NURSERY_WEEKS = { brassica: 6, legume: 3, allium: 9, solanaceae: 8, apiaceae: 5, cucurbit: 4, chenopod: 4, other: 6, flower: 6 };
+
   const seeds = overlayLoad('allotment:seeds:v1', seedsData); // live sowings + packets
   const nextYear = new Date().getFullYear() + 1;
   document.getElementById('ns-title').textContent = `Next season (${nextYear})`;
+
+  // ---- season timeline -----------------------------------------------------
+  const PKEY = 'allotment:plans:v1';
+  const PPATH = 'src/data/plans.json';
+  const stampTl = scopeStamp(document.getElementById('tl'));
+  let pdata = overlayLoad(PKEY, plansData);
+  let pBaseline = JSON.stringify(plansData);
+  const pDirty = () => JSON.stringify(pdata) !== pBaseline;
+  const bar = document.getElementById('bar');
+  const barStatus = document.getElementById('bar-status');
+  const savePlans = () => { overlaySave(PKEY, pdata); bar.hidden = !pDirty(); };
+
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const N_MONTHS = 18;
+  const now = new Date();
+  const m0 = now.getFullYear() * 12 + now.getMonth() - 1; // axis starts one month back
+  const mIdx = (ym) => { const [y, m] = ym.split('-').map(Number); return y * 12 + (m - 1); };
+  const idx2ym = (i) => `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
+  const idx2label = (i) => MON[i % 12] + ((i % 12) === 0 ? ` ’${String(Math.floor(i / 12)).slice(2)}` : '');
+  const areaNm = (id) => areasData.areas.find((a) => a.id === id)?.name || id;
+  const famName = (f) => FAMILY_LABEL[f] || f;
+  const planWhat = (p) => (p.crops?.length ? p.crops.join(', ') : famName(p.family));
+  const sowByDate = (p) => { const d = new Date(p.from + '-01T00:00:00'); d.setDate(d.getDate() - (NURSERY_WEEKS[p.family] ?? 6) * 7); return d; };
+
+  /** Bars for what's ACTUALLY in a bed, from sowings + plantings. */
+  function actualBars(bed) {
+    const bars = [];
+    for (const s of seeds.sowings || []) {
+      if (s.destinationAreaId !== bed.id || s.stage === 'failed') continue;
+      if (!(s.stage === 'planted-out' || !s.underGlass)) continue;
+      const start = mIdx((s.plantedOutDate || s.sownDate).slice(0, 7));
+      const end = s.expectedHarvestFrom ? mIdx(s.expectedHarvestFrom.slice(0, 7)) + 1 : start + 3;
+      bars.push({ s: start, e: end, label: s.crop, fam: s.family, kind: 'actual' });
+    }
+    for (const p of bed.plantings || []) {
+      if (PERENNIAL.has(p.family)) bars.push({ s: m0, e: m0 + N_MONTHS - 1, label: p.crop, fam: p.family, kind: 'actual', perennial: true });
+      else if (p.harvestFrom) {
+        const hf = mIdx(p.harvestFrom.slice(0, 7));
+        bars.push({ s: hf - 2, e: p.harvestTo ? mIdx(p.harvestTo.slice(0, 7)) : hf + 1, label: p.crop, fam: p.family, kind: 'actual' });
+      }
+    }
+    return bars;
+  }
+
+  function renderTimeline() {
+    const tl = document.getElementById('tl');
+    tl.replaceChildren();
+    const nowCol = now.getFullYear() * 12 + now.getMonth() - m0;
+
+    const head = document.createElement('div'); head.className = 'tlrow tlrow--head';
+    const corner = document.createElement('span'); corner.className = 'tl-name'; head.append(corner);
+    for (let i = 0; i < N_MONTHS; i++) {
+      const c = document.createElement('span'); c.className = 'tl-mon' + (i === nowCol ? ' is-now' : '');
+      c.style.gridColumn = String(i + 2); c.textContent = idx2label(m0 + i);
+      head.append(c);
+    }
+    tl.append(head);
+
+    for (const bed of beds) {
+      const bars = [
+        ...actualBars(bed),
+        ...pdata.plans.filter((p) => p.areaId === bed.id).map((p) => ({ s: mIdx(p.from), e: mIdx(p.to) + 1, label: planWhat(p), fam: p.family, kind: 'plan', ref: p })),
+      ].sort((a, b) => a.s - b.s);
+      // pack overlapping bars into lanes
+      const lanes = [];
+      for (const b of bars) { let l = lanes.findIndex((end) => end <= b.s); if (l === -1) { l = lanes.length; lanes.push(0); } lanes[l] = b.e; b.lane = l; }
+
+      const row = document.createElement('div'); row.className = 'tlrow';
+      row.style.gridTemplateRows = `repeat(${Math.max(1, lanes.length)}, 1.55rem)`;
+      const nowStripe = document.createElement('span'); nowStripe.className = 'tl-nowcol'; nowStripe.style.gridColumn = String(nowCol + 2); nowStripe.style.gridRow = `1 / ${Math.max(2, lanes.length + 1)}`; row.append(nowStripe);
+      const name = document.createElement('button'); name.type = 'button'; name.className = 'tl-name tl-name--btn'; name.title = 'Plan something for this bed';
+      name.textContent = bed.name.replace(/ — .*/, '');
+      const plus = document.createElement('span'); plus.className = 'tl-plus'; plus.textContent = '＋'; name.append(plus);
+      name.addEventListener('click', () => openPlan(bed, null));
+      row.append(name);
+
+      for (const b of bars) {
+        const el = document.createElement(b.kind === 'plan' ? 'button' : 'span');
+        if (b.kind === 'plan') el.type = 'button';
+        el.className = `tlbar tlbar--${b.kind}`;
+        el.style.setProperty('--bc', FAM_COLORS[b.fam] || '#64748b');
+        const c1 = Math.max(0, b.s - m0), c2 = Math.min(N_MONTHS, b.e - m0);
+        if (c2 <= 0 || c1 >= N_MONTHS) continue;
+        el.style.gridColumn = `${c1 + 2} / ${c2 + 2}`;
+        el.style.gridRow = String(b.lane + 1);
+        el.textContent = b.label;
+        el.title = `${b.label} · ${famName(b.fam)}${b.kind === 'plan' ? ' (plan — tap to edit)' : ''}`;
+        if (b.kind === 'plan') el.addEventListener('click', () => openPlan(areasData.areas.find((a) => a.id === b.ref.areaId), b.ref));
+        row.append(el);
+      }
+      tl.append(row);
+    }
+    stampTl(tl);
+    renderReminders();
+    bar.hidden = !pDirty();
+  }
+
+  function renderReminders() {
+    const el = document.getElementById('reminders');
+    el.replaceChildren();
+    const items = pdata.plans
+      .map((p) => ({ p, sowBy: sowByDate(p), weeks: NURSERY_WEEKS[p.family] ?? 6 }))
+      .sort((a, b) => a.sowBy - b.sowBy);
+    for (const { p, sowBy, weeks } of items) {
+      const line = document.createElement('p'); line.className = 'reminder';
+      line.style.setProperty('--bc', FAM_COLORS[p.family] || '#64748b');
+      const late = sowBy < now;
+      line.textContent = `🌱 Sow ${planWhat(p)} by ~${MON[sowBy.getMonth()]} ${sowBy.getFullYear()} (${weeks} wks under glass) → plant out ${MON[+p.from.slice(5) - 1]} in ${areaNm(p.areaId)}${late ? ' — sow now!' : ''}`;
+      el.append(line);
+    }
+    stampTl(el);
+  }
+
+  // ---- paint / edit a plan ---------------------------------------------------
+  const planDialog = document.getElementById('plan-dialog');
+  const planForm = document.getElementById('plan-form');
+  function fieldEl(label, node) { const w = document.createElement('label'); w.className = 'field'; const s = document.createElement('span'); s.textContent = label; w.append(s, node); return w; }
+  function openPlan(bed, plan) {
+    planForm.replaceChildren();
+    const h = document.createElement('h3'); h.textContent = plan ? `Edit plan — ${bed.name}` : `Paint ${bed.name}`; planForm.append(h);
+    const fam = document.createElement('select');
+    for (const f of Object.keys(NURSERY_WEEKS)) { const o = document.createElement('option'); o.value = f; o.textContent = famName(f); if ((plan?.family || 'brassica') === f) o.selected = true; fam.append(o); }
+    planForm.append(fieldEl('Family (the paint)', fam));
+    const shortlistWrap = document.createElement('div'); shortlistWrap.className = 'shortlist';
+    const extra = document.createElement('input'); extra.type = 'text'; extra.placeholder = 'Other crops, comma-separated (optional)';
+    function refreshShortlist() {
+      shortlistWrap.replaceChildren();
+      const packets = (seeds.seeds || []).filter((s) => s.family === fam.value && s.inStock !== false);
+      for (const s of packets) {
+        const lab = document.createElement('label'); lab.className = 'shortlist__item';
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = s.crop;
+        cb.checked = !!plan?.crops?.includes(s.crop);
+        lab.append(cb, document.createTextNode(`${s.crop}${s.variety ? ` ‘${s.variety}’` : ''}`));
+        shortlistWrap.append(lab);
+      }
+      if (!packets.length) { const p = document.createElement('p'); p.className = 'muted-note'; p.textContent = 'No packets of this family in the seed bank — name crops below.'; shortlistWrap.append(p); }
+      stampTl(shortlistWrap);
+    }
+    fam.addEventListener('change', refreshShortlist); refreshShortlist();
+    planForm.append(fieldEl('Shortlist from your seed bank', shortlistWrap));
+    extra.value = plan?.crops?.filter((c) => !(seeds.seeds || []).some((s) => s.crop === c)).join(', ') || '';
+    planForm.append(fieldEl('', extra));
+    const from = document.createElement('input'); from.type = 'month'; from.value = plan?.from || idx2ym(m0 + 2); planForm.append(fieldEl('Plant out (month)', from));
+    const to = document.createElement('input'); to.type = 'month'; to.value = plan?.to || idx2ym(m0 + 6); planForm.append(fieldEl('Clear by (month)', to));
+    const notes = document.createElement('input'); notes.type = 'text'; notes.value = plan?.notes || ''; planForm.append(fieldEl('Notes (optional)', notes));
+
+    const menu = document.createElement('div'); menu.className = 'dialog__menu';
+    if (plan) {
+      const del = document.createElement('button'); del.type = 'button'; del.className = 'danger'; del.textContent = 'Delete';
+      del.addEventListener('click', () => { pdata.plans = pdata.plans.filter((x) => x.id !== plan.id); savePlans(); planDialog.close(); renderTimeline(); });
+      menu.append(del);
+    }
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'ctl ctl--ghost'; cancel.textContent = 'Cancel'; cancel.addEventListener('click', () => planDialog.close());
+    const ok = document.createElement('button'); ok.type = 'submit'; ok.className = 'ctl ctl--primary'; ok.textContent = plan ? 'Save' : 'Paint it';
+    menu.append(cancel, ok); planForm.append(menu);
+    planForm.onsubmit = () => {
+      if (!from.value || !to.value) return;
+      const crops = [
+        ...[...shortlistWrap.querySelectorAll('input:checked')].map((c) => c.value),
+        ...extra.value.split(',').map((x) => x.trim()).filter(Boolean),
+      ];
+      const rec = { id: plan?.id || uid('plan-'), areaId: bed.id, family: fam.value, crops: crops.length ? crops : undefined, from: from.value, to: to.value < from.value ? from.value : to.value, notes: notes.value.trim() || undefined };
+      if (plan) Object.assign(plan, rec); else pdata.plans.push(rec);
+      savePlans(); renderTimeline();
+    };
+    stampTl(planForm); planDialog.showModal();
+  }
+  planDialog.addEventListener('click', (e) => { if (e.target === planDialog) planDialog.close(); });
+
+  document.getElementById('publish').addEventListener('click', async () => {
+    const token = await getToken(); if (!token) return;
+    barStatus.textContent = 'Saving…';
+    try {
+      await commitFiles(token, [{ path: PPATH, text: JSON.stringify(pdata, null, 2) }], 'Update bed plans');
+      pBaseline = JSON.stringify(pdata); bar.hidden = !pDirty(); barStatus.textContent = '✓ Saved — live in ~1 min.';
+    } catch (e) { barStatus.textContent = e.message === 'auth' ? 'Auth failed — check token.' : 'Error: ' + e.message; }
+  });
+  document.getElementById('discard').addEventListener('click', () => {
+    if (!confirm('Discard unsaved plans?')) return;
+    overlayClear(PKEY); pdata = structuredClone(plansData); renderTimeline(); barStatus.textContent = '';
+  });
 
   const grid = document.getElementById('ns-grid');
   const stamp = scopeStamp(grid);
@@ -196,6 +368,8 @@ const rotation = [
     grid.append(li);
   }
   stamp(grid);
+
+  renderTimeline();
 </script>
 
 <style>
@@ -220,6 +394,43 @@ const rotation = [
     font-size: 1.3rem;
     margin: 0 0 0.9rem;
   }
+
+  .savebar { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, white); border-radius: var(--radius-sm); padding: 0.5rem 0.8rem; margin-bottom: 1.2rem; }
+  .savebar__label { font-weight: 700; color: var(--accent); }
+  .savebar__status { color: var(--green-700); font-size: 0.85rem; }
+  .ctl { font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); }
+  .ctl--primary { background: var(--green); color: #fff; border-color: var(--green); }
+  .ctl--ghost { color: var(--muted); border-color: transparent; }
+  .danger { font: inherit; font-weight: 600; cursor: pointer; border: 1px solid #e3b8b0; color: #a23b2b; background: var(--panel); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); margin-right: auto; }
+
+  /* season timeline */
+  .tl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); margin-bottom: 0.8rem; }
+  .tl { min-width: 52rem; padding: 0.5rem 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.3rem; }
+  .tlrow { display: grid; grid-template-columns: 7.5rem repeat(18, minmax(1.9rem, 1fr)); gap: 2px 1px; align-items: stretch; position: relative; }
+  .tlrow--head { position: sticky; top: 0; background: var(--panel); z-index: 2; }
+  .tl-mon { font-size: 0.64rem; font-weight: 700; color: var(--muted); text-transform: uppercase; padding: 0.15rem 0; text-align: center; white-space: nowrap; overflow: hidden; }
+  .tl-mon.is-now { color: var(--green-700); background: color-mix(in srgb, var(--green) 10%, white); border-radius: 4px; }
+  .tl-nowcol { background: color-mix(in srgb, var(--green) 6%, transparent); border-radius: 3px; }
+  .tl-name { grid-column: 1; grid-row: 1 / -1; align-self: start; font: inherit; font-size: 0.78rem; font-weight: 700; color: var(--ink-soft); text-align: left; padding: 0.2rem 0.4rem 0.2rem 0.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tl-name--btn { cursor: pointer; border: 0; background: transparent; }
+  .tl-name--btn:hover { color: var(--green-700); }
+  .tl-plus { display: inline-block; margin-left: 0.25rem; color: var(--green); font-weight: 800; }
+  .tlbar { font: inherit; font-size: 0.68rem; font-weight: 600; color: #fff; border: 0; border-radius: 5px; padding: 0 0.35rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; line-height: 1.45rem; min-width: 0; }
+  .tlbar--actual { background: color-mix(in srgb, var(--bc) 85%, black 0%); }
+  .tlbar--plan { cursor: pointer; color: color-mix(in srgb, var(--bc) 65%, black); background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--bc) 28%, white), color-mix(in srgb, var(--bc) 28%, white) 6px, color-mix(in srgb, var(--bc) 12%, white) 6px, color-mix(in srgb, var(--bc) 12%, white) 12px); border: 1.5px dashed var(--bc); }
+
+  .reminders { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 1.6rem; }
+  .reminder { margin: 0; font-size: 0.88rem; color: var(--ink-soft); border-left: 3px solid var(--bc, var(--green)); padding-left: 0.6rem; }
+
+  .dialog { border: 1px solid var(--line); border-radius: var(--radius); padding: 0; max-width: 460px; width: 94vw; box-shadow: var(--shadow); }
+  .dialog::backdrop { background: rgba(20, 28, 18, 0.4); }
+  .dialog form { padding: 1.2rem; display: flex; flex-direction: column; gap: 0.2rem; }
+  .field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.3rem 0; font-size: 0.8rem; color: var(--muted); }
+  .field input, .field select { font: inherit; font-size: 1rem; color: var(--ink); padding: 0.4rem 0.55rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; }
+  .shortlist { display: flex; flex-direction: column; gap: 0.25rem; max-height: 9rem; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: 0.4rem 0.55rem; }
+  .shortlist__item { display: flex; align-items: center; gap: 0.45rem; font-size: 0.92rem; color: var(--ink); }
+  .muted-note { margin: 0; font-size: 0.82rem; color: var(--muted); }
+  .dialog__menu { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.8rem; }
   .grid {
     list-style: none;
     margin: 0 0 2rem;
