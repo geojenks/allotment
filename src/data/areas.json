@@ -422,6 +422,18 @@
           }
         }
       ]
+    },
+    {
+      "id": "home-greenhouse",
+      "name": "Home greenhouse",
+      "type": "structure",
+      "shape": {
+        "x": 143.5,
+        "y": 56,
+        "w": 11,
+        "h": 8
+      },
+      "notes": "The greenhouse at home — where sowings start life. Shown beside the plot for convenience; it isn't actually on the allotment."
     }
   ],
   "markers": [

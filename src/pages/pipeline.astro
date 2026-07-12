@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
 <Base title="Allotment — Pipeline" active="pipeline" wide={true}>
@@ -35,7 +36,7 @@ import Base from '../layouts/Base.astro';
       <ul id="col-seeds" class="cards"></ul>
     </section>
     <section class="col">
-      <h2>🌱 Nursery <span class="colcount" id="n-nursery"></span></h2>
+      <h2>🌱 Nursery <span class="colcount" id="n-nursery"></span> <a class="gh-link" href={`${base}/#home-greenhouse`}>📷 journal</a></h2>
       <ul id="col-nursery" class="cards"></ul>
       <p class="empty" id="e-nursery" hidden>Nothing under glass.</p>
     </section>
@@ -293,10 +294,13 @@ import Base from '../layouts/Base.astro';
     const h = document.createElement('h3'); h.textContent = cropTitle(s); detailForm.append(h);
     const story = document.createElement('p'); story.className = 'story'; story.textContent = storyOf(s).replace(/^f/, 'F') + '.'; detailForm.append(story);
 
-    // Progress photos: shots of its bed taken while this sowing has been in it.
-    if (s.destinationAreaId) {
-      const area = areasData.areas.find((a) => a.id === s.destinationAreaId);
-      const since = s.plantedOutDate || (!s.underGlass ? s.sownDate : null);
+    // Progress photos: shots of wherever this sowing currently lives — its bed
+    // once planted out (or direct-sown), the Home greenhouse while in the nursery.
+    const inNursery = s.underGlass && s.stage !== 'planted-out';
+    const photoAreaId = inNursery ? 'home-greenhouse' : s.destinationAreaId;
+    const since = inNursery ? s.sownDate : (s.plantedOutDate || (!s.underGlass ? s.sownDate : null));
+    if (photoAreaId) {
+      const area = areasData.areas.find((a) => a.id === photoAreaId);
       const shots = area && since
         ? (area.events || []).filter((e) => e.kind === 'photo' && e.photo && e.date >= since).sort((a, b) => a.date.localeCompare(b.date))
         : [];
@@ -304,14 +308,15 @@ import Base from '../layouts/Base.astro';
       if (shots.length) {
         const row = document.createElement('div'); row.className = 'progress__row';
         for (const ev of shots.slice(-6)) {
-          const a = document.createElement('a'); a.href = `${SITE_BASE}/#${s.destinationAreaId}`;
+          const a = document.createElement('a'); a.href = `${SITE_BASE}/#${photoAreaId}`;
           const img = document.createElement('img'); img.src = `${SITE_BASE}/${ev.photo.src}`; img.alt = ev.date; img.loading = 'lazy'; img.title = ev.date;
           a.append(img); row.append(a);
         }
         prog.append(row);
       }
-      const link = document.createElement('a'); link.className = 'progress__link'; link.href = `${SITE_BASE}/#${s.destinationAreaId}`;
-      link.textContent = shots.length ? `See progress in ${areaName(s.destinationAreaId) || 'the bed'} →` : `Open ${areaName(s.destinationAreaId) || 'the bed'} (no photos since planting yet) →`;
+      const place = inNursery ? 'the greenhouse journal' : (areaName(photoAreaId) || 'the bed');
+      const link = document.createElement('a'); link.className = 'progress__link'; link.href = `${SITE_BASE}/#${photoAreaId}`;
+      link.textContent = shots.length ? `See progress in ${place} →` : `Open ${place} (no photos in this window yet) →`;
       prog.append(link);
       detailForm.append(prog);
     }
@@ -469,6 +474,7 @@ import Base from '../layouts/Base.astro';
   .col { background: color-mix(in srgb, var(--paper-2) 55%, white); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem; min-height: 10rem; }
   .col h2 { font-size: 0.95rem; margin: 0 0 0.6rem 0.2rem; display: flex; align-items: baseline; gap: 0.4rem; }
   .colcount { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+  .gh-link { margin-left: auto; font-size: 0.72rem; font-weight: 600; text-decoration: none; }
   .cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
   .empty { color: var(--muted); font-size: 0.85rem; margin: 0.2rem 0 0 0.2rem; }
 

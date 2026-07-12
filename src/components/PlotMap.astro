@@ -141,10 +141,17 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   // ---- state + persistence ----------------------------------------------
   const baseline = { areas: plotData.areas, markers: plotData.markers || [], cropIcons: plotData.cropIcons || {} };
   let baselineJSON = JSON.stringify(baseline);
+  const djb2 = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); };
   function loadState() {
     try {
       const raw = localStorage.getItem(STORE_KEY);
-      if (raw) { const p = JSON.parse(raw); if (p && Array.isArray(p.areas)) return { areas: p.areas, markers: p.markers || [], cropIcons: p.cropIcons || {} }; }
+      if (raw) {
+        const p = JSON.parse(raw);
+        // If the site has moved on (published from elsewhere) and this device had
+        // nothing unsaved when it last wrote, drop the stale local snapshot.
+        const stale = p.base && p.base !== djb2(baselineJSON) && !p.dirty;
+        if (!stale && p && Array.isArray(p.areas)) return { areas: p.areas, markers: p.markers || [], cropIcons: p.cropIcons || {} };
+      }
     } catch {}
     return JSON.parse(baselineJSON);
   }
@@ -153,7 +160,10 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   let saveTimer = null;
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify({ areas, markers, cropIcons })); } catch {} updateSaveState(); }, 150);
+    saveTimer = setTimeout(() => {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify({ areas, markers, cropIcons, base: djb2(baselineJSON), dirty: isDirty() })); } catch {}
+      updateSaveState();
+    }, 150);
   }
   const isDirty = () => JSON.stringify({ areas, markers, cropIcons }) !== baselineJSON;
 
