@@ -367,7 +367,8 @@
       "location": "greenhouse",
       "underGlass": true,
       "stage": "sown",
-      "qty": 3
+      "qty": 3,
+      "noPlantOut": true
     },
     {
       "id": "sow-xzivqd",
@@ -379,7 +380,8 @@
       "location": "greenhouse",
       "underGlass": true,
       "stage": "sown",
-      "qty": 3
+      "qty": 3,
+      "noPlantOut": true
     },
     {
       "id": "sow-cd0iw3",
