@@ -444,6 +444,16 @@
             "w": 720,
             "h": 1280
           }
+        },
+        {
+          "id": "ph-higu35",
+          "date": "2026-07-13",
+          "kind": "photo",
+          "photo": {
+            "src": "photos/home-greenhouse/2026-07-13-ph-higu35.jpg",
+            "w": 720,
+            "h": 1280
+          }
         }
       ]
     }
