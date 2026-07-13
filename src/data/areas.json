@@ -433,7 +433,19 @@
         "w": 11,
         "h": 8
       },
-      "notes": "The greenhouse at home — where sowings start life. Shown beside the plot for convenience; it isn't actually on the allotment."
+      "notes": "The greenhouse at home — where sowings start life. Shown beside the plot for convenience; it isn't actually on the allotment.",
+      "events": [
+        {
+          "id": "ph-cs5g6a",
+          "date": "2026-07-13",
+          "kind": "photo",
+          "photo": {
+            "src": "photos/home-greenhouse/2026-07-13-ph-cs5g6a.jpg",
+            "w": 720,
+            "h": 1280
+          }
+        }
+      ]
     }
   ],
   "markers": [
@@ -452,7 +464,8 @@
       "crop": "Asparagus",
       "x": 108.124,
       "y": 120.772,
-      "r": 0.75
+      "r": 0.75,
+      "fortified": true
     },
     {
       "id": "m-lakz16",
@@ -642,7 +655,269 @@
       "x": 108.819,
       "y": 126.817,
       "r": 0.75
+    },
+    {
+      "id": "m-94l2sf",
+      "icon": "🥦",
+      "label": "Cabbage",
+      "crop": "Cabbage",
+      "x": 107.671,
+      "y": 108.893,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-3pn646",
+      "icon": "🥦",
+      "label": "Cabbage",
+      "crop": "Cabbage",
+      "x": 109.599,
+      "y": 109.062,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-etcg5v",
+      "icon": "🥦",
+      "label": "Cabbage",
+      "crop": "Cabbage",
+      "x": 111.527,
+      "y": 109.079,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-88k2iy",
+      "icon": "🥦",
+      "label": "Cabbage",
+      "crop": "Cabbage",
+      "x": 108.415,
+      "y": 110.94,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-3ijbwz",
+      "icon": "🥦",
+      "label": "Cabbage",
+      "crop": "Cabbage",
+      "x": 109.734,
+      "y": 110.839,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-uyd8a3",
+      "icon": "🥦",
+      "label": "Cabbage",
+      "crop": "Cabbage",
+      "x": 111.713,
+      "y": 111.278,
+      "r": 0.75
+    },
+    {
+      "id": "m-j8dgx9",
+      "icon": "🥦",
+      "label": "Cabbage",
+      "crop": "Cabbage",
+      "x": 108.212,
+      "y": 112.801,
+      "r": 0.75
+    },
+    {
+      "id": "m-umf58i",
+      "icon": "🥦",
+      "label": "Cabbage",
+      "crop": "Cabbage",
+      "x": 109.717,
+      "y": 112.953,
+      "r": 0.75
+    },
+    {
+      "id": "m-5651p1",
+      "icon": "🥦",
+      "label": "Cabbage",
+      "crop": "Cabbage",
+      "x": 111.578,
+      "y": 112.953,
+      "r": 0.75
+    },
+    {
+      "id": "m-bos9sz",
+      "icon": "🥦",
+      "label": "Cauliflower",
+      "crop": "Cauliflower",
+      "x": 113.523,
+      "y": 108.978,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-1437fy",
+      "icon": "🥦",
+      "label": "Cauliflower",
+      "crop": "Cauliflower",
+      "x": 115.215,
+      "y": 108.707,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-zgc2nz",
+      "icon": "🥦",
+      "label": "Cauliflower",
+      "crop": "Cauliflower",
+      "x": 116.687,
+      "y": 108.944,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-ql6j34",
+      "icon": "🥦",
+      "label": "Cauliflower",
+      "crop": "Cauliflower",
+      "x": 114.166,
+      "y": 110.653,
+      "r": 0.75
+    },
+    {
+      "id": "m-oh1k87",
+      "icon": "🥦",
+      "label": "Cauliflower",
+      "crop": "Cauliflower",
+      "x": 115.519,
+      "y": 110.72,
+      "r": 0.75
+    },
+    {
+      "id": "m-o53elr",
+      "icon": "🥦",
+      "label": "Cauliflower",
+      "crop": "Cauliflower",
+      "x": 113.591,
+      "y": 112.818,
+      "r": 0.75
+    },
+    {
+      "id": "m-yr9cgb",
+      "icon": "🥦",
+      "label": "Cauliflower",
+      "crop": "Cauliflower",
+      "x": 114.589,
+      "y": 112.564,
+      "r": 0.75
+    },
+    {
+      "id": "m-62962h",
+      "icon": "🥦",
+      "label": "Cauliflower",
+      "crop": "Cauliflower",
+      "x": 115.756,
+      "y": 112.632,
+      "r": 0.75
+    },
+    {
+      "id": "m-yg5axl",
+      "icon": "🥦",
+      "label": "Savoy Cabbage",
+      "crop": "Savoy Cabbage",
+      "x": 118.243,
+      "y": 109.029,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-0tu9r5",
+      "icon": "🥦",
+      "label": "Savoy Cabbage",
+      "crop": "Savoy Cabbage",
+      "x": 119.647,
+      "y": 108.995,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-7gh0lq",
+      "icon": "🥦",
+      "label": "Savoy Cabbage",
+      "crop": "Savoy Cabbage",
+      "x": 121.271,
+      "y": 109.012,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-3lrt8o",
+      "icon": "🥦",
+      "label": "Savoy Cabbage",
+      "crop": "Savoy Cabbage",
+      "x": 117.549,
+      "y": 110.991,
+      "r": 0.75
+    },
+    {
+      "id": "m-47kvgp",
+      "icon": "🥦",
+      "label": "Savoy Cabbage",
+      "crop": "Savoy Cabbage",
+      "x": 119.309,
+      "y": 111.109,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-kn9k42",
+      "icon": "🥦",
+      "label": "Savoy Cabbage",
+      "crop": "Savoy Cabbage",
+      "x": 120.916,
+      "y": 110.991,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-d7nahq",
+      "icon": "🥦",
+      "label": "Savoy Cabbage",
+      "crop": "Savoy Cabbage",
+      "x": 122.32,
+      "y": 110.754,
+      "r": 0.75,
+      "fortified": true
+    },
+    {
+      "id": "m-z3brpg",
+      "icon": "🥦",
+      "label": "Savoy Cabbage",
+      "crop": "Savoy Cabbage",
+      "x": 118.294,
+      "y": 113.071,
+      "r": 0.75
+    },
+    {
+      "id": "m-hqzhkd",
+      "icon": "🥦",
+      "label": "Savoy Cabbage",
+      "crop": "Savoy Cabbage",
+      "x": 120.053,
+      "y": 113.139,
+      "r": 0.75
+    },
+    {
+      "id": "m-7vrrbt",
+      "icon": "🥦",
+      "label": "Savoy Cabbage",
+      "crop": "Savoy Cabbage",
+      "x": 121.609,
+      "y": 112.987,
+      "r": 0.75
     }
   ],
-  "cropIcons": {}
+  "cropIcons": {
+    "Asparagus": "🌾",
+    "Cabbage": "🥦",
+    "Cauliflower": "🥦",
+    "Savoy Cabbage": "🥦"
+  }
 }
