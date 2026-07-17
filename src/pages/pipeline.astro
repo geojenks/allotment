@@ -302,7 +302,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     if (photoAreaId) {
       const area = areasData.areas.find((a) => a.id === photoAreaId);
       const shots = area && since
-        ? (area.events || []).filter((e) => e.kind === 'photo' && e.photo && e.date >= since).sort((a, b) => a.date.localeCompare(b.date))
+        ? (area.events || []).filter((e) => e.kind === 'photo' && e.photo && e.date >= since
+            && (!e.crop || e.crop.toLowerCase() === s.crop.toLowerCase())) // crop-tagged photos of OTHER crops don't count
+            .sort((a, b) => a.date.localeCompare(b.date))
         : [];
       const prog = document.createElement('div'); prog.className = 'progress';
       if (shots.length) {

@@ -63,6 +63,8 @@ export interface AreaEvent {
   id: string;
   date: string; // ISO date (YYYY-MM-DD)
   kind: 'photo' | 'note' | 'milestone';
+  /** Optional crop tag — lets photos of different crops coexist in one journal and powers the cross-place crop timeline. */
+  crop?: string;
   text?: string;
   photo?: AreaPhoto;
 }

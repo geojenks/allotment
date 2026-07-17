@@ -332,7 +332,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     const badge = el('circle', { cx: s.x + 2.4, cy: s.y + 2.4, r: 1.8, fill: c, stroke: '#fff', 'stroke-width': 0.32 });
     const badgeText = el('text', { x: s.x + 2.4, y: s.y + 2.4, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 2.1, fill: '#fff', 'font-family': 'system-ui, sans-serif' });
     badgeText.textContent = String(number);
-    const count = el('text', { x: s.x + s.w - 1, y: s.y + s.h - 1, 'text-anchor': 'end', 'font-size': 2.6, fill: '#1f3a17', stroke: '#fff', 'stroke-width': 0.5, 'paint-order': 'stroke', 'font-family': 'system-ui, sans-serif', class: 'plant-count' });
+    const count = el('text', { x: s.x + s.w - 1, y: s.y + s.h - 1, 'text-anchor': 'end', 'font-size': 2.05, 'font-weight': 600, fill: '#1f3a17', stroke: '#fff', 'stroke-width': 0.45, 'paint-order': 'stroke', 'font-family': 'system-ui, sans-serif', class: 'plant-count' });
     const handle = el('rect', { x: s.x + s.w - 1.6, y: s.y + s.h - 1.6, width: 1.6, height: 1.6, fill: '#fff', stroke: c, 'stroke-width': 0.4, class: 'handle' });
     handle.style.display = 'none';
     g.append(rect, badge, badgeText, count, handle);
@@ -352,8 +352,59 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     const c = colorFor(area); for (const nd of [n.rect, n.badge, n.handle]) nd.setAttribute('stroke', c);
     n.rect.setAttribute('fill', c); n.badge.setAttribute('fill', c);
   }
+  // ---- zoomed-out bed headlines: "6 cabba · 7 cauli", urgency-coloured -----
+  const addDaysL = (iso, days) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + days); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const NURSERY_WEEKS_L = { brassica: 6, legume: 3, allium: 9, solanaceae: 8, apiaceae: 5, cucurbit: 4, chenopod: 4, asparagus: 10, other: 6, flower: 6 };
+  const seedOfL = (s) => (seedsData.seeds || []).find((x) => x.id === s.seedId);
+  function expHarvestL(s) {
+    if (s.expectedHarvestFrom) return s.expectedHarvestFrom;
+    const seed = seedOfL(s); const w = seed?.sowIndoors || seed?.sowOutdoors;
+    if (seed?.harvest && w) return addDaysL(s.sownDate, Math.round(((seed.harvest.from - w.from + 12) % 12) * 30.44));
+    return addDaysL(s.sownDate, 14 * 7);
+  }
+  function expPlantOutL(s) {
+    if (s.expectedPlantOut) return s.expectedPlantOut;
+    return addDaysL(s.sownDate, (seedOfL(s)?.nurseryWeeks ?? NURSERY_WEEKS_L[s.family] ?? 6) * 7);
+  }
+  /** Colour for a crop line: red = needs action, amber = struggling, green = harvest. */
+  function cropUrgency(area, crop) {
+    const k = crop.toLowerCase(); const t = todayStr();
+    const ms = markersInArea(area).filter((m) => (m.crop || m.label || '').toLowerCase() === k);
+    if (ms.some((m) => m.condition === 'eaten' || m.condition === 'dead')) return '#9c2413';
+    let color = '#1f3a17';
+    if (ms.some((m) => m.condition === 'struggling')) color = '#a06a10';
+    for (const s of sowings) {
+      if (s.stage === 'failed' || s.crop.toLowerCase() !== k) continue;
+      if (s.destinationAreaId === area.id && (s.stage === 'planted-out' || !s.underGlass)) {
+        const eh = expHarvestL(s);
+        if (eh <= t) return '#0b6b2e'; // ready — deep green
+        if (daysBetween(t, eh) <= 14) color = '#3e8d46'; // nearly — light green
+      } else if (s.destinationAreaId === area.id && s.underGlass && !s.noPlantOut) {
+        if (expPlantOutL(s) < t) return '#c04a2f'; // its plants are overdue to go in here
+      }
+    }
+    return color;
+  }
+  const shortCrop = (c) => (c.length > 7 ? c.slice(0, 6).trimEnd() + '.' : c).toLowerCase();
   function updatePlantCounts() {
-    for (const [id, n] of areaNodes) { const a = areas.find((x) => x.id === id); const c = a ? markersInArea(a).length : 0; n.count.textContent = c ? `🌱${c}` : ''; }
+    for (const [id, n] of areaNodes) {
+      const a = areas.find((x) => x.id === id);
+      n.count.replaceChildren();
+      if (!a) continue;
+      // headline per crop, from map markers (fall back to planner counts)
+      const agg = new Map();
+      for (const m of markersInArea(a)) { const k = m.crop || m.label; if (k) agg.set(k, (agg.get(k) || 0) + 1); }
+      if (!agg.size) for (const s of sowings) if (s.destinationAreaId === a.id && s.stage === 'planted-out' && s.stage !== 'failed') agg.set(s.crop, (agg.get(s.crop) || 0) + (s.qty || 1));
+      const lines = [...agg.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3)
+        .map(([crop, cnt]) => ({ text: `${cnt} ${shortCrop(crop)}`, color: cropUrgency(a, crop) }));
+      if (agg.size > 3) lines.push({ text: `+${agg.size - 3} more`, color: '#5a6152' });
+      const bx = a.shape.x + a.shape.w - 1;
+      n.count.setAttribute('y', a.shape.y + a.shape.h - 1 - (Math.max(lines.length, 1) - 1) * 2.3);
+      lines.forEach((ln, i) => {
+        const ts = el('tspan', { x: bx, dy: i === 0 ? 0 : 2.3, fill: ln.color });
+        ts.textContent = ln.text; n.count.append(ts);
+      });
+    }
     updateRecon();
   }
 
@@ -425,6 +476,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   // ---- area overlay (single-frame overview → full-screen "bed dossier") ---
   function showOverlay(id) {
     const a = areas.find((x) => x.id === id); if (!a) { hideOverlay(); return; }
+    if (overlayId !== id) journalFilter = null; // reset the crop filter when switching areas
     overlayId = id; selected = { kind: 'area', id }; refreshSelection();
     avTitle.textContent = a.name; avEdit.textContent = mode === 'edit' ? '✓ Done' : '✎ Edit';
     areaView.hidden = false; document.body.classList.add('av-open');
@@ -494,8 +546,26 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     {
       const hh = document.createElement('h3'); hh.textContent = 'Plants here'; info.append(hh);
       if (inArea.length) {
+        // one chip per crop: "🥦 6× Cabbage · 3🛡 · 1🐌"
+        const agg = new Map();
+        for (const m of inArea) {
+          const k = m.crop || m.label || 'plant';
+          const a2 = agg.get(k) || { n: 0, collars: 0, eaten: 0, struggling: 0, icon: m.icon };
+          a2.n++; if (m.fortified) a2.collars++;
+          if (m.condition === 'eaten' || m.condition === 'dead') a2.eaten++;
+          else if (m.condition === 'struggling') a2.struggling++;
+          agg.set(k, a2);
+        }
         const row = document.createElement('div'); row.className = 'plant-chips';
-        for (const m of inArea) { const chip = document.createElement('span'); chip.className = 'plant-chip'; chip.textContent = `${m.icon} ${m.label || ''}`.trim(); row.append(chip); }
+        for (const [name, a2] of [...agg.entries()].sort((x, y) => y[1].n - x[1].n)) {
+          const chip = document.createElement('span'); chip.className = 'plant-chip';
+          const bits = [`${a2.icon} ${a2.n}× ${name}`];
+          if (a2.collars) bits.push(`${a2.collars}🛡`);
+          if (a2.struggling) bits.push(`${a2.struggling}🤕`);
+          if (a2.eaten) bits.push(`${a2.eaten}🐌`);
+          chip.textContent = bits.join(' · ');
+          row.append(chip);
+        }
         info.append(row);
       }
       const z = document.createElement('button'); z.type = 'button'; z.className = 'zoom-link'; z.textContent = inArea.length ? '🌱 Arrange plants on the map' : '🌱 Add plants on the map';
@@ -841,7 +911,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
       img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('load')); }; img.src = url;
     });
   }
-  async function addPhotos(area, fileList, dateStr, statusEl) {
+  async function addPhotos(area, fileList, dateStr, statusEl, cropTag) {
     const token = await getToken(); if (!token) return;
     const files = [], newEvents = [];
     if (statusEl) statusEl.textContent = 'Processing…';
@@ -851,7 +921,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
         const { blob, base64, w, h } = await compress(file);
         const id = uid('ph-'); const src = `photos/${area.id}/${dateStr}-${id}.jpg`;
         files.push({ path: `public/${src}`, base64 });
-        const ev = { id, date: dateStr, kind: 'photo', photo: { src, w, h } };
+        const ev = { id, date: dateStr, kind: 'photo', crop: cropTag || undefined, photo: { src, w, h } };
         newEvents.push(ev); transientPhotos.set(id, URL.createObjectURL(blob));
       }
       if (!newEvents.length) { if (statusEl) statusEl.textContent = 'No images found.'; return; }
@@ -873,11 +943,28 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   const fmtDate = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
   const photoSrc = (ev) => transientPhotos.get(ev.id) || `${base}/${ev.photo.src}`;
+  let journalFilter = null; // crop filter for the open journal ("sections" = crops)
   function buildJournal(area) {
     const wrap = document.createElement('div'); wrap.className = 'journal';
     const hh = document.createElement('h3'); hh.textContent = 'Timeline'; wrap.append(hh);
     const events = (area.events || []).slice().sort((a, b) => a.date.localeCompare(b.date));
-    const photos = events.filter((e) => e.kind === 'photo' && e.photo);
+    const allPhotos = events.filter((e) => e.kind === 'photo' && e.photo);
+    const journalCrops = [...new Set(allPhotos.map((e) => e.crop).filter(Boolean))].sort();
+    if (journalFilter && !journalCrops.includes(journalFilter)) journalFilter = null;
+    if (journalCrops.length) {
+      const fr = document.createElement('div'); fr.className = 'jfilter';
+      const mk = (label, val) => {
+        const b = document.createElement('button'); b.type = 'button';
+        b.className = 'jfilter__chip' + ((journalFilter || null) === val ? ' is-on' : '');
+        b.textContent = label;
+        b.addEventListener('click', () => { journalFilter = val; renderInfo(); });
+        fr.append(b);
+      };
+      mk('All', null);
+      for (const c of journalCrops) mk(`${iconFor(c)} ${c}`, c);
+      wrap.append(fr);
+    }
+    const photos = journalFilter ? allPhotos.filter((e) => e.crop === journalFilter) : allPhotos;
     const today = todayStr();
     const start = area.created || events[0]?.date || today;
     const span = Math.max(1, daysBetween(start, today));
@@ -920,13 +1007,18 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     const syncAgo = () => { const d = daysBetween(dateInput.value || today, today); dateAgo.textContent = d <= 0 ? '(today)' : d === 1 ? '(yesterday)' : `(${d} days ago)`; };
     dateInput.addEventListener('change', syncAgo); syncAgo();
     dateRow.append(dateLab, dateInput, dateAgo);
+    // optional crop tag so photos of different crops coexist in one journal
+    const cropSel = document.createElement('select'); cropSel.className = 'journal__crop'; cropSel.title = 'Tag the photo with a crop (optional)';
+    cropSel.append(new Option('🏷 no crop tag', ''));
+    for (const c of allCrops(OFF_PLOT.has(area.id) ? null : area.id)) cropSel.append(new Option(`${iconFor(c)} ${c}`, c));
+    if (journalFilter) cropSel.value = journalFilter; // filtering by a crop? default new photos to it
     const addBtn = document.createElement('button'); addBtn.type = 'button'; addBtn.className = 'ctl ctl--primary'; addBtn.textContent = '📷 Add photo';
     const noteBtn = document.createElement('button'); noteBtn.type = 'button'; noteBtn.className = 'ctl'; noteBtn.textContent = '✎ Note';
     const status = document.createElement('span'); status.className = 'journal__status';
     addBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', () => { if (fileInput.files?.length) addPhotos(area, fileInput.files, dateInput.value || today, status); fileInput.value = ''; });
+    fileInput.addEventListener('change', () => { if (fileInput.files?.length) addPhotos(area, fileInput.files, dateInput.value || today, status, cropSel.value || undefined); fileInput.value = ''; });
     noteBtn.addEventListener('click', () => { const txt = prompt(`Note for ${fmtDate(dateInput.value || today)}:`); if (!txt) return; area.events = area.events || []; area.events.push({ id: uid('n-'), date: dateInput.value || today, kind: 'note', text: txt }); save(); renderInfo(); });
-    tools.append(dateRow, addBtn, noteBtn, fileInput, status); wrap.append(tools);
+    tools.append(dateRow, cropSel, addBtn, noteBtn, fileInput, status); wrap.append(tools);
 
     if (events.length) {
       const ul = document.createElement('ul'); ul.className = 'timeline';
@@ -938,7 +1030,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
         }
         const body = document.createElement('div'); body.className = 'timeline__body';
         const dt = document.createElement('span'); dt.className = 'timeline__date'; dt.textContent = fmtDate(e.date); body.append(dt);
-        const tx = document.createElement('span'); tx.className = 'timeline__txt'; tx.textContent = e.kind === 'photo' ? '📷 Photo' : (e.text || '');
+        const tx = document.createElement('span'); tx.className = 'timeline__txt'; tx.textContent = e.kind === 'photo' ? `📷 Photo${e.crop ? ' · ' + e.crop : ''}` : (e.text || '');
         body.append(tx); li.append(body);
 
         const acts = document.createElement('div'); acts.className = 'timeline__acts';
@@ -1164,6 +1256,10 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   .journal__daterow { flex-basis: 100%; display: flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; color: var(--muted); }
   .journal__daterow em { font-style: normal; font-size: 0.78rem; }
   .journal__date { font: inherit; font-size: 1rem; padding: 0.3rem 0.4rem; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); background: #fff; }
+  .journal__crop { font: inherit; font-size: 0.9rem; padding: 0.35rem 0.4rem; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); background: #fff; max-width: 46vw; }
+  .jfilter { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.2rem 0 0.5rem; }
+  .jfilter__chip { font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; border-radius: 999px; padding: 0.2rem 0.65rem; border: 1px solid var(--line-strong); background: var(--panel); color: var(--muted); }
+  .jfilter__chip.is-on { border-color: var(--green); background: var(--green-100); color: var(--green-700); }
   .journal__status { font-size: 0.78rem; color: var(--green-700); flex-basis: 100%; }
   .timeline { list-style: none; margin: 0.5rem 0 0; padding: 0; border-left: 2px solid var(--line); }
   .timeline li { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.05rem 0 0.55rem 0.85rem; }

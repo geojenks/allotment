@@ -9,7 +9,8 @@ type Sowing = {
   sownDate: string; location: string; underGlass: boolean; stage: string; noPlantOut?: boolean;
   destinationAreaId?: string; plantedOutDate?: string; expectedPlantOut?: string; expectedHarvestFrom?: string; notes?: string;
 };
-type Area = { id: string; name: string; plantings?: { crop: string; family: string; notes?: string }[] };
+type AreaEvent = { id: string; date: string; kind: string; crop?: string; photo?: { src: string } };
+type Area = { id: string; name: string; plantings?: { crop: string; family: string; notes?: string }[]; events?: AreaEvent[] };
 export type PlantSheetDeps = { seeds: { seeds: Seed[]; sowings: Sowing[] }; areas: Area[]; base: string };
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -31,6 +32,10 @@ const CSS = `
 #plant-sheet .ps-line { font: inherit; text-align: left; cursor: pointer; border: 1px solid #e7e3d8; background: #fff; border-radius: 8px; padding: 0.5rem 0.65rem; font-size: 0.86rem; color: #3c4339; text-decoration: none; display: block; }
 #plant-sheet .ps-line:hover { border-color: #356a45; }
 #plant-sheet .ps-packet { margin: 0; font-size: 0.84rem; color: #3c4339; background: #f3f1e9; border-radius: 8px; padding: 0.5rem 0.65rem; }
+#plant-sheet .ps-strip { display: flex; gap: 0.35rem; overflow-x: auto; padding-bottom: 0.15rem; }
+#plant-sheet .ps-strip a { flex-shrink: 0; text-decoration: none; text-align: center; }
+#plant-sheet .ps-strip img { width: 3.6rem; height: 3.6rem; object-fit: cover; border-radius: 8px; border: 1px solid #e7e3d8; display: block; }
+#plant-sheet .ps-strip .ps-cap { display: block; font-size: 0.6rem; color: #767c70; max-width: 3.6rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #plant-sheet .ps-links { display: flex; flex-wrap: wrap; gap: 0.7rem; font-size: 0.86rem; }
 #plant-sheet .ps-links a { font-weight: 600; color: #2a5538; text-decoration: none; }
 #plant-sheet .ps-menu { display: flex; justify-content: flex-end; margin-top: 0.4rem; }
@@ -64,7 +69,14 @@ function expPlantOut(s: Sowing, seed?: Seed): string {
 }
 
 export function openPlantSheet(crop: string, deps: PlantSheetDeps) {
-  const { seeds, areas, base } = deps;
+  const { seeds, base } = deps;
+  // Prefer the device's live map snapshot (unpublished photo tags, moved photos)
+  // over the build-time areas.json.
+  let areas = deps.areas;
+  try {
+    const raw = localStorage.getItem('allotment:plot:v1');
+    if (raw) { const p = JSON.parse(raw); if (Array.isArray(p.areas) && p.areas.length) areas = p.areas; }
+  } catch {}
   const key = crop.toLowerCase();
   const areaName = (id?: string) => areas.find((a) => a.id === id)?.name;
   const dialog = ensureDialog();
@@ -117,6 +129,25 @@ export function openPlantSheet(crop: string, deps: PlantSheetDeps) {
       a.textContent = `in ${area.name}${p.notes ? ' — ' + p.notes : ''}`;
       wrap.append(a); beds.add(area.id);
     }
+  }
+
+  // the crop's photo story, across every place (crop-tagged photos)
+  const shots: { e: AreaEvent; areaId: string; areaName: string }[] = [];
+  for (const a of areas) {
+    for (const e of a.events || []) {
+      if (e.kind === 'photo' && e.photo && e.crop && e.crop.toLowerCase() === key) shots.push({ e, areaId: a.id, areaName: a.name });
+    }
+  }
+  if (shots.length) {
+    shots.sort((x, y) => x.e.date.localeCompare(y.e.date));
+    const strip = document.createElement('div'); strip.className = 'ps-strip';
+    for (const { e, areaId, areaName: an } of shots) {
+      const a = document.createElement('a'); a.href = `${base}/map#${areaId}`;
+      const img = document.createElement('img'); img.src = `${base}/${e.photo!.src}`; img.alt = `${crop} ${e.date}`; img.loading = 'lazy'; img.title = `${fmt(e.date)} · ${an}`;
+      const cap = document.createElement('span'); cap.className = 'ps-cap'; cap.textContent = `${fmt(e.date)}`;
+      a.append(img, cap); strip.append(a);
+    }
+    wrap.append(strip);
   }
 
   // the packet, if you have one
