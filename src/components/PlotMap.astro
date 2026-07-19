@@ -60,8 +60,6 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
           <button id="fs" type="button" title="Fullscreen" aria-label="Fullscreen">⤡</button>
         </div>
 
-        <p id="place-hint" class="place-hint" hidden>Tap inside to place the plant</p>
-
         <div id="recon" class="recon" hidden></div>
 
         <div id="plant-bar" class="plant-bar" hidden>
@@ -138,11 +136,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     [/asparagus|rhubarb/i, '🌾'], [/flower|dahlia|sunflower|marigold|cosmos/i, '🌻'], [/grape/i, '🍇'],
   ];
   const guessIcon = (name) => { for (const [re, ic] of ICON_GUESS) if (re.test(name || '')) return ic; return '🌱'; };
-  // Marker condition → colour; slug collar ("fortified") darkens the ring.
-  const COND = { growing: '#3f7d2f', struggling: '#d99a2b', eaten: '#b3402f', dead: '#6b6b6b' };
-  const COND_LABEL = { growing: 'Growing well', struggling: 'Partly eaten but alive', eaten: 'Decimated by slugs', dead: 'Dead / gone' };
-  const fillOf = (m) => COND[m.condition] || COND.growing;
-  const strokeOf = (m) => (m.fortified ? '#33322e' : fillOf(m));
+  const COND = { growing: '#3f7d2f', struggling: '#d99a2b', eaten: '#b3402f' };
 
   const SVGNS = 'http://www.w3.org/2000/svg';
   const STORE_KEY = 'allotment:plot:v1';
@@ -151,7 +145,24 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   const TX = -98.595917, TY = -49.702042;
 
   // ---- state + persistence ----------------------------------------------
-  const baseline = { areas: plotData.areas, markers: plotData.markers || [], cropIcons: plotData.cropIcons || {} };
+  // Legacy individually-placed markers fold into per-area `stock` counts.
+  function migrateMarkers(state) {
+    for (const m of state.markers || []) {
+      const a = state.areas.find((x) => m.x >= x.shape.x && m.x <= x.shape.x + x.shape.w && m.y >= x.shape.y && m.y <= x.shape.y + x.shape.h);
+      if (!a) continue;
+      const crop = m.crop || m.label || 'Plant';
+      a.stock = a.stock || [];
+      let e = a.stock.find((s) => s.crop.toLowerCase() === crop.toLowerCase());
+      if (!e) { e = { crop, qty: 0 }; a.stock.push(e); }
+      e.qty++;
+      if (m.fortified) e.collars = (e.collars || 0) + 1;
+      if (m.condition === 'eaten' || m.condition === 'dead') e.eaten = (e.eaten || 0) + 1;
+      else if (m.condition === 'struggling') e.struggling = (e.struggling || 0) + 1;
+    }
+    delete state.markers;
+    return state;
+  }
+  const baseline = migrateMarkers({ areas: plotData.areas, markers: plotData.markers || [], cropIcons: plotData.cropIcons || {} });
   let baselineJSON = JSON.stringify(baseline);
   const djb2 = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); };
   function loadState() {
@@ -162,22 +173,22 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
         // If the site has moved on (published from elsewhere) and this device had
         // nothing unsaved when it last wrote, drop the stale local snapshot.
         const stale = p.base && p.base !== djb2(baselineJSON) && !p.dirty;
-        if (!stale && p && Array.isArray(p.areas)) return { areas: p.areas, markers: p.markers || [], cropIcons: p.cropIcons || {} };
+        if (!stale && p && Array.isArray(p.areas)) return migrateMarkers({ areas: p.areas, markers: p.markers || [], cropIcons: p.cropIcons || {} });
       }
     } catch {}
     return JSON.parse(baselineJSON);
   }
   const st = loadState();
-  let areas = st.areas, markers = st.markers, cropIcons = st.cropIcons;
+  let areas = st.areas, cropIcons = st.cropIcons;
   let saveTimer = null;
   function save() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      try { localStorage.setItem(STORE_KEY, JSON.stringify({ areas, markers, cropIcons, base: djb2(baselineJSON), dirty: isDirty() })); } catch {}
+      try { localStorage.setItem(STORE_KEY, JSON.stringify({ areas, cropIcons, base: djb2(baselineJSON), dirty: isDirty() })); } catch {}
       updateSaveState();
     }, 150);
   }
-  const isDirty = () => JSON.stringify({ areas, markers, cropIcons }) !== baselineJSON;
+  const isDirty = () => JSON.stringify({ areas, cropIcons }) !== baselineJSON;
 
   // Live sowings (for the crop palette + planner reconciliation): prefer the
   // seeds page's unsaved localStorage overlay over the build-time file.
@@ -201,7 +212,6 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   const plantBar = document.getElementById('plant-bar');
   const palette = document.getElementById('palette');
   const addAreaBtn = document.getElementById('add-area');
-  const placeHint = document.getElementById('place-hint');
   const exportDialog = document.getElementById('export-dialog');
   const zoomBtn = document.getElementById('zoom-btn');
   const saveStateEl = document.getElementById('save-state');
@@ -220,9 +230,9 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   // regardless of any stacking context the page layout introduces.
   document.body.append(areaView, markerPop);
 
-  let mode = 'view', tool = 'select', placeCrop = null;
+  let mode = 'view';
   let selected = null, focusedAreaId = null;
-  const areaNodes = new Map(), markerNodes = new Map();
+  const areaNodes = new Map();
 
   // ---- geometry / pan-zoom ----------------------------------------------
   let vb = { ...PLOT };
@@ -310,7 +320,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   function zoomOut() {
     const a = areas.find((x) => x.id === focusedAreaId);
     const cy = a ? a.shape.y + TY + a.shape.h / 2 : undefined; // keep the bed in view
-    focusedAreaId = null; setTool('select'); setVB(homeView(cy), true); refreshChrome();
+    focusedAreaId = null; setVB(homeView(cy), true); refreshChrome();
   }
 
   // ---- helpers -----------------------------------------------------------
@@ -318,7 +328,27 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   const colorFor = (a) => (TYPE_META[a.type] || TYPE_META.unused).color;
   const uid = (p) => p + Math.random().toString(36).slice(2, 8);
   const round = (n) => Math.round(n * 1000) / 1000;
-  const markersInArea = (a) => markers.filter((m) => m.x >= a.shape.x && m.x <= a.shape.x + a.shape.w && m.y >= a.shape.y && m.y <= a.shape.y + a.shape.h);
+
+  // ---- bed stock: per-crop counts ----------------------------------------
+  const stockOf = (a) => a.stock || [];
+  function stockEntry(area, crop, create) {
+    area.stock = area.stock || [];
+    let e = area.stock.find((s) => s.crop.toLowerCase() === crop.toLowerCase());
+    if (!e && create) { e = { crop, qty: 0 }; area.stock.push(e); }
+    return e;
+  }
+  const clampStock = (e) => {
+    for (const k of ['collars', 'struggling', 'eaten']) { if (e[k]) e[k] = Math.min(e[k], e.qty); if (!e[k]) delete e[k]; }
+  };
+  function addStock(areaId, crop, delta) {
+    const area = areas.find((x) => x.id === areaId); if (!area) return null;
+    const e = stockEntry(area, crop, delta > 0); if (!e) return null;
+    e.qty = Math.max(0, e.qty + delta);
+    if (e.qty === 0) area.stock = area.stock.filter((x) => x !== e); else clampStock(e);
+    save(); renderStock(); updatePlantCounts();
+    return e.qty > 0 ? e : null;
+  }
+  const stockColor = (e) => (e.eaten ? COND.eaten : e.struggling ? COND.struggling : COND.growing);
 
   // ---- render areas ------------------------------------------------------
   // Off-plot places (the home greenhouse) get their own framed card below the
@@ -369,10 +399,10 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   /** Colour for a crop line: red = needs action, amber = struggling, green = harvest. */
   function cropUrgency(area, crop) {
     const k = crop.toLowerCase(); const t = todayStr();
-    const ms = markersInArea(area).filter((m) => (m.crop || m.label || '').toLowerCase() === k);
-    if (ms.some((m) => m.condition === 'eaten' || m.condition === 'dead')) return '#9c2413';
+    const e = stockOf(area).find((x) => x.crop.toLowerCase() === k);
+    if (e?.eaten) return '#9c2413';
     let color = '#1f3a17';
-    if (ms.some((m) => m.condition === 'struggling')) color = '#a06a10';
+    if (e?.struggling) color = '#a06a10';
     for (const s of sowings) {
       if (s.stage === 'failed' || s.crop.toLowerCase() !== k) continue;
       if (s.destinationAreaId === area.id && (s.stage === 'planted-out' || !s.underGlass)) {
@@ -391,9 +421,9 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
       const a = areas.find((x) => x.id === id);
       n.count.replaceChildren();
       if (!a) continue;
-      // headline per crop, from map markers (fall back to planner counts)
+      // headline per crop, from the bed's stock (fall back to planner counts)
       const agg = new Map();
-      for (const m of markersInArea(a)) { const k = m.crop || m.label; if (k) agg.set(k, (agg.get(k) || 0) + 1); }
+      for (const e of stockOf(a)) agg.set(e.crop, (agg.get(e.crop) || 0) + e.qty);
       if (!agg.size) for (const s of sowings) if (s.destinationAreaId === a.id && s.stage === 'planted-out' && s.stage !== 'failed') agg.set(s.crop, (agg.get(s.crop) || 0) + (s.qty || 1));
       const lines = [...agg.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3)
         .map(([crop, cnt]) => ({ text: `${cnt} ${shortCrop(crop)}`, color: cropUrgency(a, crop) }));
@@ -412,23 +442,23 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   function reconLines(areaId) {
     const a = areas.find((x) => x.id === areaId); if (!a) return [];
-    const iconCounts = new Map();
-    for (const m of markersInArea(a)) { const k = (m.crop || m.label || 'plant').toLowerCase(); iconCounts.set(k, (iconCounts.get(k) || 0) + 1); }
+    const mapCounts = new Map();
+    for (const e of stockOf(a)) mapCounts.set(e.crop.toLowerCase(), (mapCounts.get(e.crop.toLowerCase()) || 0) + e.qty);
     const planCounts = new Map();
     for (const s of sowings) {
       if (s.stage === 'planted-out' && s.destinationAreaId === areaId) { const k = s.crop.toLowerCase(); planCounts.set(k, (planCounts.get(k) || 0) + (s.qty || 1)); }
     }
     const lines = [];
-    for (const n of [...new Set([...iconCounts.keys(), ...planCounts.keys()])].sort()) {
-      const i = iconCounts.get(n) || 0, p = planCounts.get(n) || 0;
+    for (const n of [...new Set([...mapCounts.keys(), ...planCounts.keys()])].sort()) {
+      const i = mapCounts.get(n) || 0, p = planCounts.get(n) || 0;
       if (i === p || p === 0) continue; // only flag when the planner and map disagree
-      if (i === 0) lines.push(`${cap(n)}: ${p} planted out in the planner, no icons dropped yet`);
-      else lines.push(`${cap(n)}: ${p} in the planner vs ${i} icon${i === 1 ? '' : 's'} here`);
+      if (i === 0) lines.push(`${cap(n)}: ${p} planted out in the planner, none on the map yet`);
+      else lines.push(`${cap(n)}: ${p} in the planner vs ${i} here`);
     }
-    // icons with no planner entry at all (only mention crops that exist in sowings, to avoid nagging about trees etc.)
-    for (const [n, i] of iconCounts) {
+    // on the map but not in the planner (only mention crops that exist in sowings, to avoid nagging about trees etc.)
+    for (const [n, i] of mapCounts) {
       if (planCounts.has(n)) continue;
-      if (sowings.some((s) => s.crop.toLowerCase() === n && s.stage !== 'failed')) lines.push(`${cap(n)}: ${i} icon${i === 1 ? '' : 's'} here, none planted out here in the planner`);
+      if (sowings.some((s) => s.crop.toLowerCase() === n && s.stage !== 'failed')) lines.push(`${cap(n)}: ${i} here, none planted out here in the planner`);
     }
     return lines;
   }
@@ -441,37 +471,34 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     if (lines.length) el.textContent = '📋 ' + lines.join('  ·  ');
   }
 
-  // ---- render markers ----------------------------------------------------
-  function renderMarkers() { markerLayer.replaceChildren(); markerNodes.clear(); markers.forEach((m) => renderMarker(m)); }
-  const glyphSize = (m) => Math.max(1.3, Math.min(m.r * 1.7, 7));
-  function renderMarker(m) {
-    const g = el('g', { class: 'marker', 'data-id': m.id });
-    const circle = el('circle', { cx: m.x, cy: m.y, r: m.r, fill: fillOf(m), 'fill-opacity': 0.16, stroke: strokeOf(m), 'stroke-width': m.fortified ? 0.55 : 0.4 });
-    const glyph = el('text', { x: m.x, y: m.y, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': glyphSize(m) });
-    glyph.textContent = m.icon;
-    const handle = el('circle', { cx: m.x + m.r, cy: m.y, r: 0.7, fill: '#fff', stroke: '#3f7d2f', 'stroke-width': 0.35, class: 'handle' });
-    handle.style.display = 'none';
-    g.append(circle, glyph, handle); markerLayer.append(g);
-    markerNodes.set(m.id, { group: g, circle, glyph, handle });
-    SCOPE(g);
-  }
-  function syncMarker(m) {
-    const n = markerNodes.get(m.id); if (!n) return;
-    n.circle.setAttribute('cx', m.x); n.circle.setAttribute('cy', m.y); n.circle.setAttribute('r', m.r);
-    n.circle.setAttribute('fill', fillOf(m)); n.circle.setAttribute('stroke', strokeOf(m)); n.circle.setAttribute('stroke-width', m.fortified ? 0.55 : 0.4);
-    n.glyph.setAttribute('x', m.x); n.glyph.setAttribute('y', m.y);
-    n.glyph.setAttribute('font-size', glyphSize(m)); n.glyph.textContent = m.icon;
-    n.handle.setAttribute('cx', m.x + m.r); n.handle.setAttribute('cy', m.y);
+  // ---- render stock badges (zoomed-in bed view: "🥦 ×6" per crop) ---------
+  function renderStock() {
+    markerLayer.replaceChildren();
+    for (const a of areas) {
+      if (OFF_PLOT.has(a.id)) continue;
+      const entries = stockOf(a); if (!entries.length) continue;
+      const s = a.shape;
+      const cols = Math.max(1, Math.floor((s.w - 2.2) / 6.8));
+      entries.forEach((st, i) => {
+        const cx = s.x + 5.2 + (i % cols) * 6.8;
+        const cy = s.y + 4.9 + Math.floor(i / cols) * 4.1;
+        const g = el('g', { class: 'stockbadge', 'data-area': a.id, 'data-crop': st.crop });
+        const bg = el('rect', { x: cx - 3.1, y: cy - 1.65, width: 6.2, height: 3.3, rx: 1.65, fill: '#ffffff', 'fill-opacity': 0.88, stroke: st.collars ? '#33322e' : stockColor(st), 'stroke-width': st.collars ? 0.3 : 0.2 });
+        const ic = el('text', { x: cx - 1.45, y: cy + 0.08, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 2.15 });
+        ic.textContent = iconFor(st.crop);
+        const n = el('text', { x: cx + 1.5, y: cy + 0.08, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 1.85, 'font-weight': 700, fill: stockColor(st), 'font-family': 'system-ui, sans-serif' });
+        n.textContent = '×' + st.qty;
+        g.append(bg, ic, n); markerLayer.append(g); SCOPE(g);
+      });
+    }
   }
 
   // ---- selection ---------------------------------------------------------
   function refreshSelection() {
-    for (const [id, n] of areaNodes) { const s = selected?.kind === 'area' && selected.id === id; n.group.classList.toggle('is-selected', s); n.handle.style.display = mode === 'edit' && tool === 'select' && s ? '' : 'none'; }
-    for (const [id, n] of markerNodes) { const s = selected?.kind === 'marker' && selected.id === id; n.group.classList.toggle('is-selected', s); n.handle.style.display = mode === 'edit' && tool === 'select' && s ? '' : 'none'; }
+    for (const [id, n] of areaNodes) { const s = selected?.kind === 'area' && selected.id === id; n.group.classList.toggle('is-selected', s); n.handle.style.display = mode === 'edit' && s ? '' : 'none'; }
   }
   function selectArea(id) { selected = { kind: 'area', id }; refreshSelection(); refreshChrome(); if (overlayId === id) renderInfo(); }
-  function selectMarker(id) { selected = { kind: 'marker', id }; refreshSelection(); refreshChrome(); showMarkerPop(id); }
-  function clearSelection() { selected = null; refreshSelection(); refreshChrome(); hideMarkerPop(); }
+  function clearSelection() { selected = null; refreshSelection(); refreshChrome(); hideStockPop(); }
 
   // ---- area overlay (single-frame overview → full-screen "bed dossier") ---
   function showOverlay(id) {
@@ -488,7 +515,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   }
   function hideOverlay() {
     overlayId = null; areaView.hidden = true; document.body.classList.remove('av-open');
-    hideMarkerPop(); selected = null; refreshSelection(); refreshChrome();
+    hideStockPop(); selected = null; refreshSelection(); refreshChrome();
   }
   function stepArea(delta) {
     if (!overlayId || areas.length < 2) return;
@@ -507,16 +534,59 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlayId) history.back(); });
 
-  // ---- plant marker popover (shown over the focused bed) -----------------
-  function showMarkerPop(id) {
-    const m = markers.find((x) => x.id === id); if (!m) { hideMarkerPop(); return; }
+  // ---- stock popover: edit one crop's counts in a bed ---------------------
+  function stepRow(labelText, get, set) {
+    const row = document.createElement('div'); row.className = 'step-row';
+    const lab = document.createElement('span'); lab.className = 'step-row__label'; lab.textContent = labelText;
+    const minus = document.createElement('button'); minus.type = 'button'; minus.className = 'step-btn'; minus.textContent = '−';
+    const val = document.createElement('span'); val.className = 'step-row__val'; val.textContent = String(get());
+    const plus = document.createElement('button'); plus.type = 'button'; plus.className = 'step-btn'; plus.textContent = '+';
+    const bump = (d) => { set(get() + d); val.textContent = String(get()); };
+    minus.addEventListener('click', () => bump(-1));
+    plus.addEventListener('click', () => bump(1));
+    row.append(lab, minus, val, plus);
+    return row;
+  }
+  function showStockPop(areaId, crop) {
+    const area = areas.find((x) => x.id === areaId);
+    const e = area && stockEntry(area, crop, false);
+    if (!e) { hideStockPop(); return; }
     const bar = document.createElement('div'); bar.className = 'marker-pop__bar';
-    const close = document.createElement('button'); close.type = 'button'; close.className = 'pop-close'; close.textContent = '✕'; close.setAttribute('aria-label', 'Close'); close.addEventListener('click', () => clearSelection());
+    const close = document.createElement('button'); close.type = 'button'; close.className = 'pop-close'; close.textContent = '✕'; close.setAttribute('aria-label', 'Close'); close.addEventListener('click', () => hideStockPop());
     bar.append(close);
-    markerPop.replaceChildren(bar, mode === 'edit' ? markerForm(m) : markerInfoFrag(m));
+    const frag = document.createDocumentFragment();
+    const h = document.createElement('h2'); h.textContent = `${iconFor(e.crop)} ${e.crop} in ${area.name.replace(/ — .*/, '')}`; frag.append(h);
+    if (mode !== 'edit') {
+      const bits = [`×${e.qty}`];
+      if (e.collars) bits.push(`${e.collars} 🛡 slug collars`);
+      if (e.struggling) bits.push(`${e.struggling} 🤕 struggling`);
+      if (e.eaten) bits.push(`${e.eaten} 🐌 eaten`);
+      const p = document.createElement('p'); p.className = 'muted'; p.textContent = bits.join(' · '); frag.append(p);
+    } else {
+      const refresh = () => { renderStock(); updatePlantCounts(); save(); };
+      frag.append(stepRow('How many', () => e.qty, (v) => {
+        e.qty = Math.max(0, v); clampStock(e);
+        if (e.qty === 0) { area.stock = area.stock.filter((x) => x !== e); refresh(); hideStockPop(); renderPalette(); return; }
+        refresh();
+      }));
+      frag.append(stepRow('🛡 Slug collars', () => e.collars || 0, (v) => { e.collars = Math.min(Math.max(0, v), e.qty); if (!e.collars) delete e.collars; refresh(); }));
+      frag.append(stepRow('🤕 Struggling', () => e.struggling || 0, (v) => { e.struggling = Math.min(Math.max(0, v), e.qty); if (!e.struggling) delete e.struggling; refresh(); }));
+      frag.append(stepRow('🐌 Eaten / dead', () => e.eaten || 0, (v) => { e.eaten = Math.min(Math.max(0, v), e.qty); if (!e.eaten) delete e.eaten; refresh(); }));
+      const iconWrap = document.createElement('div'); iconWrap.className = 'icon-grid';
+      for (const icon of ICONS) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'icon-btn' + (icon === iconFor(e.crop) ? ' is-active' : ''); b.textContent = icon;
+        b.addEventListener('click', () => { cropIcons[e.crop] = icon; save(); renderStock(); renderPalette(); showStockPop(areaId, crop); });
+        iconWrap.append(b);
+      }
+      frag.append(field('Icon for this plant', iconWrap));
+      const del = document.createElement('button'); del.type = 'button'; del.className = 'danger'; del.textContent = `Remove ${e.crop} from this bed`;
+      del.addEventListener('click', () => { area.stock = area.stock.filter((x) => x !== e); save(); renderStock(); updatePlantCounts(); renderPalette(); hideStockPop(); });
+      frag.append(del);
+    }
+    markerPop.replaceChildren(bar, frag);
     markerPop.hidden = false; SCOPE(markerPop);
   }
-  function hideMarkerPop() { markerPop.hidden = true; markerPop.replaceChildren(); }
+  function hideStockPop() { markerPop.hidden = true; markerPop.replaceChildren(); }
 
   // ---- info panel --------------------------------------------------------
   function tag(text, cls) { const s = document.createElement('span'); s.className = 'tag ' + (cls || ''); s.textContent = text; return s; }
@@ -542,33 +612,23 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     if (area.notes) { const p = document.createElement('p'); p.className = 'notes'; p.textContent = area.notes; info.append(p); }
     info.append(buildJournal(area));
     if (OFF_PLOT.has(area.id)) return; // no map plants/arranging for off-plot places
-    const inArea = markersInArea(area);
+    const entries = stockOf(area);
     {
       const hh = document.createElement('h3'); hh.textContent = 'Plants here'; info.append(hh);
-      if (inArea.length) {
-        // one chip per crop: "🥦 6× Cabbage · 3🛡 · 1🐌"
-        const agg = new Map();
-        for (const m of inArea) {
-          const k = m.crop || m.label || 'plant';
-          const a2 = agg.get(k) || { n: 0, collars: 0, eaten: 0, struggling: 0, icon: m.icon };
-          a2.n++; if (m.fortified) a2.collars++;
-          if (m.condition === 'eaten' || m.condition === 'dead') a2.eaten++;
-          else if (m.condition === 'struggling') a2.struggling++;
-          agg.set(k, a2);
-        }
+      if (entries.length) {
         const row = document.createElement('div'); row.className = 'plant-chips';
-        for (const [name, a2] of [...agg.entries()].sort((x, y) => y[1].n - x[1].n)) {
+        for (const e of [...entries].sort((x, y) => y.qty - x.qty)) {
           const chip = document.createElement('span'); chip.className = 'plant-chip';
-          const bits = [`${a2.icon} ${a2.n}× ${name}`];
-          if (a2.collars) bits.push(`${a2.collars}🛡`);
-          if (a2.struggling) bits.push(`${a2.struggling}🤕`);
-          if (a2.eaten) bits.push(`${a2.eaten}🐌`);
+          const bits = [`${iconFor(e.crop)} ${e.qty}× ${e.crop}`];
+          if (e.collars) bits.push(`${e.collars}🛡`);
+          if (e.struggling) bits.push(`${e.struggling}🤕`);
+          if (e.eaten) bits.push(`${e.eaten}🐌`);
           chip.textContent = bits.join(' · ');
           row.append(chip);
         }
         info.append(row);
       }
-      const z = document.createElement('button'); z.type = 'button'; z.className = 'zoom-link'; z.textContent = inArea.length ? '🌱 Arrange plants on the map' : '🌱 Add plants on the map';
+      const z = document.createElement('button'); z.type = 'button'; z.className = 'zoom-link'; z.textContent = entries.length ? '🌱 Update plants in this bed' : '🌱 Add plants to this bed';
       z.addEventListener('click', () => arrangePlants(area.id)); info.append(z);
       const lines = reconLines(area.id);
       if (lines.length) { const p = document.createElement('p'); p.className = 'muted small'; p.textContent = '📋 Planner check: ' + lines.join(' · '); info.append(p); }
@@ -604,22 +664,12 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   }
   document.getElementById('pb-done').addEventListener('click', () => {
     const id = focusedAreaId;
-    setTool('select'); clearSelection();
+    clearSelection();
     if (plantingFS) { mapCard.classList.remove('map-card--full'); document.body.classList.remove('plot-fs'); plantingFS = false; }
     setMode('view'); focusedAreaId = null;
     requestAnimationFrame(() => requestAnimationFrame(relayout));
     if (id) openOverlay(id); // back to the bed's dossier
   });
-  function markerInfoFrag(m) {
-    const frag = document.createDocumentFragment();
-    const h = document.createElement('h2'); h.textContent = `${m.icon} ${m.crop || m.label || 'Plant'}`; frag.append(h);
-    const host = areas.find((a) => m.x >= a.shape.x && m.x <= a.shape.x + a.shape.w && m.y >= a.shape.y && m.y <= a.shape.y + a.shape.h);
-    const bits = [host ? `In: ${host.name}` : 'Not inside a mapped area.'];
-    bits.push(COND_LABEL[m.condition] || COND_LABEL.growing);
-    if (m.fortified) bits.push('🛡 slug collar on');
-    const p = document.createElement('p'); p.className = 'muted'; p.textContent = bits.join(' · '); frag.append(p);
-    return frag;
-  }
 
   // ---- edit forms --------------------------------------------------------
   function field(labelText, inputEl) { const wrap = document.createElement('label'); wrap.className = 'field'; const span = document.createElement('span'); span.textContent = labelText; wrap.append(span, inputEl); return wrap; }
@@ -641,53 +691,14 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     del.addEventListener('click', () => { if (!confirm(`Delete “${area.name}”?`)) return; const i = areas.findIndex((a) => a.id === area.id); if (i >= 0) areas.splice(i, 1); if (focusedAreaId === area.id) zoomOut(); if (overlayId === area.id) hideOverlay(); clearSelection(); renderAreas(); refreshSelection(); save(); });
     frag.append(del); return frag;
   }
-  function markerForm(m) {
-    const frag = document.createDocumentFragment();
-    const h = document.createElement('h2'); h.textContent = `Edit ${m.crop || m.label || 'plant'}`; frag.append(h);
-    const iconWrap = document.createElement('div'); iconWrap.className = 'icon-grid';
-    for (const icon of ICONS) {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'icon-btn' + (icon === m.icon ? ' is-active' : ''); b.textContent = icon;
-      b.addEventListener('click', () => {
-        m.icon = icon;
-        if (m.crop) cropIcons[m.crop] = icon; // future drops of this plant use it too
-        syncMarker(m); updatePlantCounts(); showMarkerPop(m.id); renderPalette(); save();
-      });
-      iconWrap.append(b);
-    }
-    frag.append(field('Icon (also becomes the default for this plant)', iconWrap));
-    const label = document.createElement('input'); label.type = 'text'; label.value = m.label || ''; label.addEventListener('input', () => { m.label = label.value; save(); }); frag.append(field('Label', label));
-    const radius = document.createElement('input'); radius.type = 'range'; radius.min = '0.3'; radius.max = '8'; radius.step = '0.1'; radius.value = String(m.r); radius.addEventListener('input', () => { m.r = Number(radius.value); lastR = m.r; syncMarker(m); save(); }); frag.append(field('Footprint radius', radius));
-    const cond = document.createElement('select');
-    for (const [v, l] of Object.entries(COND_LABEL)) { const o = document.createElement('option'); o.value = v; o.textContent = l; if ((m.condition || 'growing') === v) o.selected = true; cond.append(o); }
-    cond.addEventListener('change', () => { m.condition = cond.value === 'growing' ? undefined : cond.value; syncMarker(m); save(); });
-    frag.append(field('Condition', cond));
-    const fortRow = document.createElement('label'); fortRow.className = 'field field--check';
-    const fort = document.createElement('input'); fort.type = 'checkbox'; fort.checked = !!m.fortified;
-    fort.addEventListener('change', () => { m.fortified = fort.checked || undefined; syncMarker(m); save(); });
-    const fs = document.createElement('span'); fs.textContent = '🛡 Slug collar / fortified (dark ring)'; fortRow.append(fort, fs); frag.append(fortRow);
-    const del = document.createElement('button'); del.type = 'button'; del.className = 'danger'; del.textContent = 'Delete plant';
-    del.addEventListener('click', () => { const i = markers.findIndex((x) => x.id === m.id); if (i >= 0) markers.splice(i, 1); clearSelection(); renderMarkers(); updatePlantCounts(); refreshSelection(); save(); });
-    frag.append(del); return frag;
-  }
-
-  // ---- unified pointer: tap / element-drag / pan / pinch -----------------
+  // ---- unified pointer: tap / area-drag / pan / pinch --------------------
   const pointers = new Map();
   let down = null, pinch = null;
   const hitOf = (target) => {
-    const mEl = target.closest && target.closest('.marker'); if (mEl) return { kind: 'marker', id: mEl.getAttribute('data-id'), handle: target.classList.contains('handle') };
+    const sEl = target.closest && target.closest('.stockbadge'); if (sEl) return { kind: 'stock', areaId: sEl.getAttribute('data-area'), crop: sEl.getAttribute('data-crop') };
     const aEl = target.closest && target.closest('.area'); if (aEl) return { kind: 'area', id: aEl.getAttribute('data-id'), handle: target.classList.contains('handle') };
     return { kind: 'bg' };
   };
-  let lastR = 0.75; // ~15 cm footprint by default; remembers your last-set size
-  function dropMarkerAt(cx, cy) {
-    const p = toLocal(cx, cy);
-    const m = {
-      id: uid('m-'), icon: placeCrop ? placeCrop.icon : '🌱',
-      label: placeCrop ? placeCrop.name : '', crop: placeCrop ? placeCrop.name : undefined,
-      x: round(p.x), y: round(p.y), r: lastR,
-    };
-    markers.push(m); renderMarker(m); updatePlantCounts(); save();
-  }
   svg.addEventListener('pointerdown', (e) => {
     svg.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -696,10 +707,10 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     cancelAnimationFrame(raf); readVB();
     const hit = hitOf(e.target);
     down = { id: e.pointerId, sx: e.clientX, sy: e.clientY, hit, moved: false, startVB: { ...vb }, elDrag: null };
-    if (mode === 'edit' && tool === 'select' && hit.kind !== 'bg') {
+    if (mode === 'edit' && hit.kind === 'area') {
       const start = toLocal(e.clientX, e.clientY);
-      if (hit.kind === 'area') { const a = areas.find((x) => x.id === hit.id); selectArea(hit.id); down.elDrag = { kind: 'area', ref: a, resize: hit.handle, sx: start.x, sy: start.y, ox: a.shape.x, oy: a.shape.y, ow: a.shape.w, oh: a.shape.h }; }
-      else { const m = markers.find((x) => x.id === hit.id); selectMarker(hit.id); down.elDrag = { kind: 'marker', ref: m, resize: hit.handle, sx: start.x, sy: start.y, ox: m.x, oy: m.y, or: m.r }; }
+      const a = areas.find((x) => x.id === hit.id); selectArea(hit.id);
+      down.elDrag = { ref: a, resize: hit.handle, sx: start.x, sy: start.y, ox: a.shape.x, oy: a.shape.y, ow: a.shape.w, oh: a.shape.h };
     }
   });
   svg.addEventListener('pointermove', (e) => {
@@ -711,15 +722,9 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     if (!down.moved) return;
     if (down.elDrag) {
       const p = toLocal(e.clientX, e.clientY), d = down.elDrag;
-      if (d.kind === 'area') {
-        if (d.resize) { d.ref.shape.w = round(Math.max(2, d.ow + (p.x - d.sx))); d.ref.shape.h = round(Math.max(2, d.oh + (p.y - d.sy))); }
-        else { d.ref.shape.x = round(d.ox + (p.x - d.sx)); d.ref.shape.y = round(d.oy + (p.y - d.sy)); }
-        syncArea(d.ref);
-      } else {
-        if (d.resize) d.ref.r = round(Math.max(1, Math.hypot(p.x - d.ref.x, p.y - d.ref.y)));
-        else { d.ref.x = round(d.ox + (p.x - d.sx)); d.ref.y = round(d.oy + (p.y - d.sy)); }
-        syncMarker(d.ref);
-      }
+      if (d.resize) { d.ref.shape.w = round(Math.max(2, d.ow + (p.x - d.sx))); d.ref.shape.h = round(Math.max(2, d.oh + (p.y - d.sy))); }
+      else { d.ref.shape.x = round(d.ox + (p.x - d.sx)); d.ref.shape.y = round(d.oy + (p.y - d.sy)); }
+      syncArea(d.ref);
     } else {
       const f = down.startVB.w / svg.getBoundingClientRect().width;
       vb.x = down.startVB.x - dx * f; vb.y = down.startVB.y - dy * f; clampPan(); writeVB();
@@ -731,14 +736,11 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     if (pinch && pointers.size < 2) { pinch = null; down = null; return; }
     if (!down || e.pointerId !== down.id) return;
     if (!down.moved) {
-      // Placement happens on pointer-UP so pans and pinches never drop stray plants,
-      // and the tool stays armed for the next tap (25 plants = 25 taps).
-      if (mode === 'edit' && tool === 'place') dropMarkerAt(e.clientX, e.clientY);
-      else if (down.hit.kind === 'marker') selectMarker(down.hit.id);
+      if (down.hit.kind === 'stock') showStockPop(down.hit.areaId, down.hit.crop);
       else if (down.hit.kind === 'area' && mode === 'edit' && focusedAreaId) selectArea(down.hit.id);
       else if (down.hit.kind === 'area') openOverlay(down.hit.id);
       else clearSelection();
-    } else if (down.elDrag) { updatePlantCounts(); save(); }
+    } else if (down.elDrag) { updatePlantCounts(); renderStock(); save(); }
     down = null;
   }
   svg.addEventListener('pointerup', endPointer);
@@ -758,18 +760,14 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     applyZoom(vb, vb.w * (e.deltaY > 0 ? 1.12 : 0.89), f.x, f.y);
   }, { passive: false });
 
-  // ---- modes / tools / chrome -------------------------------------------
+  // ---- modes / chrome ----------------------------------------------------
   function setMode(next) {
-    mode = next; if (next !== 'edit') setTool('select');
+    mode = next;
     document.getElementById('mode-view').classList.toggle('is-active', next === 'view');
     document.getElementById('mode-edit').classList.toggle('is-active', next === 'edit');
     editTools.hidden = next !== 'edit'; svg.classList.toggle('is-editing', next === 'edit');
+    hideStockPop();
     refreshSelection(); refreshChrome(); renderInfo();
-  }
-  function setTool(next) {
-    tool = next;
-    if (next !== 'place') { placeCrop = null; placeHint.hidden = true; svg.classList.remove('is-placing'); for (const b of palette.querySelectorAll('.crop-btn')) b.classList.remove('is-active'); }
-    refreshSelection();
   }
   function refreshChrome() {
     const focused = !!focusedAreaId;
@@ -779,7 +777,6 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     plantBar.hidden = !planting;
     if (planting) renderPalette();
     updateRecon();
-    if (mode === 'edit' && !focused) setTool('select');
     if (focused) { zoomBtn.hidden = false; zoomBtn.textContent = '← Back to plot'; }
     else if (selected?.kind === 'area') { zoomBtn.hidden = false; zoomBtn.textContent = '🔍 Zoom in'; }
     else zoomBtn.hidden = true;
@@ -789,13 +786,13 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   document.getElementById('mode-edit').addEventListener('click', () => setMode('edit'));
   addAreaBtn.addEventListener('click', () => { const area = { id: uid('area-'), name: 'New area', type: 'bed', provisional: true, shape: { x: 118, y: 110, w: 14, h: 10 } }; areas.push(area); renderArea(area, areas.length); selectArea(area.id); save(); });
 
-  // ---- crop palette: YOUR plants (sowings, plantings, existing markers) ---
+  // ---- crop palette: YOUR plants (sowings, plantings, bed stock) ----------
   function allCrops(focusId) {
     const byKey = new Map(); // lowercase -> display name
     const add = (n) => { if (n) { const k = n.toLowerCase(); if (!byKey.has(k)) byKey.set(k, n); } };
     for (const s of sowings) if (s.stage !== 'failed') add(s.crop);
     for (const a of areas) for (const p of a.plantings || []) add(p.crop);
-    for (const m of markers) add(m.crop || m.label);
+    for (const a of areas) for (const e of stockOf(a)) add(e.crop);
     for (const n of Object.keys(cropIcons)) add(n);
     const focusArea = focusId ? areas.find((x) => x.id === focusId) : null;
     const score = (name) => {
@@ -807,23 +804,30 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     };
     return [...byKey.values()].sort((a, b) => score(a) - score(b) || a.localeCompare(b));
   }
-  function armCrop(name, btn) {
-    tool = 'place'; placeCrop = { name, icon: iconFor(name) };
-    placeHint.textContent = `Tap to place ${name} — tap ${placeCrop.icon} again to stop`;
-    placeHint.hidden = false; svg.classList.add('is-placing'); hideMarkerPop();
-    for (const x of palette.querySelectorAll('.crop-btn')) x.classList.toggle('is-active', x === btn);
-    refreshSelection();
-  }
+  // Tap a crop = +1 of it in the focused bed; the button shows the bed's count
+  // with a small − to undo a mis-tap. Fine-grained edits live in the badge popover.
   function renderPalette() {
     palette.replaceChildren();
-    for (const name of allCrops(focusedAreaId)) {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'crop-btn'; b.title = `Drop a ${name}`;
+    const focusArea = focusedAreaId ? areas.find((x) => x.id === focusedAreaId) : null;
+    const qtyOf = (name) => (focusArea && stockEntry(focusArea, name, false)?.qty) || 0;
+    const makeBtn = (name) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'crop-btn'; b.title = `Add one ${name} to this bed`;
       const ic = document.createElement('span'); ic.className = 'crop-btn__icon'; ic.textContent = iconFor(name);
       const lb = document.createElement('span'); lb.className = 'crop-btn__label'; lb.textContent = name;
-      b.append(ic, lb);
-      b.addEventListener('click', () => { if (tool === 'place' && placeCrop?.name === name) { setTool('select'); return; } armCrop(name, b); });
-      palette.append(b);
-    }
+      const q = document.createElement('span'); q.className = 'crop-btn__n'; q.hidden = true;
+      const minus = document.createElement('span'); minus.className = 'crop-btn__minus'; minus.textContent = '−'; minus.title = `Remove one ${name}`; minus.hidden = true;
+      const syncQ = () => { const n = qtyOf(name); q.textContent = '×' + n; q.hidden = !n; minus.hidden = !n; b.classList.toggle('has-some', !!n); };
+      syncQ();
+      b.addEventListener('click', (ev) => {
+        if (!focusedAreaId) return;
+        if (ev.target === minus) { addStock(focusedAreaId, name, -1); }
+        else { addStock(focusedAreaId, name, +1); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
+        syncQ(); updateRecon();
+      });
+      b.append(ic, lb, q, minus);
+      return b;
+    };
+    for (const name of allCrops(focusedAreaId)) palette.append(makeBtn(name));
     const nb = document.createElement('button'); nb.type = 'button'; nb.className = 'crop-btn crop-btn--new'; nb.title = 'Add a new plant type';
     const ni = document.createElement('span'); ni.className = 'crop-btn__icon'; ni.textContent = '＋';
     const nl = document.createElement('span'); nl.className = 'crop-btn__label'; nl.textContent = 'New plant';
@@ -832,9 +836,8 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
       const name = (prompt('Name of the new plant (e.g. "Leek"):') || '').trim();
       if (!name) return;
       if (!cropIcons[name]) { cropIcons[name] = guessIcon(name); save(); }
+      if (focusedAreaId) addStock(focusedAreaId, name, +1);
       renderPalette();
-      const btn = [...palette.querySelectorAll('.crop-btn')].find((x) => x.querySelector('.crop-btn__label')?.textContent === name);
-      armCrop(name, btn);
     });
     palette.append(nb);
     SCOPE(palette);
@@ -846,7 +849,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   document.getElementById('zin').addEventListener('click', () => { cancelAnimationFrame(raf); readVB(); const f = centerFocal(); applyZoom(vb, vb.w * 0.7, f.x, f.y); });
   document.getElementById('zout').addEventListener('click', () => { cancelAnimationFrame(raf); readVB(); const f = centerFocal(); applyZoom(vb, vb.w * 1.43, f.x, f.y); });
   document.getElementById('zreset').addEventListener('click', () => {
-    focusedAreaId = null; setTool('select'); setVB(fitBounds(PLOT, 1), true); refreshChrome(); // whole plot
+    focusedAreaId = null; setVB(fitBounds(PLOT, 1), true); refreshChrome(); // whole plot
   });
   document.getElementById('fs').addEventListener('click', () => {
     const on = mapCard.classList.toggle('map-card--full');
@@ -855,11 +858,11 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   });
 
   // ---- save actions ------------------------------------------------------
-  const buildJSON = () => JSON.stringify({ ...plotData, areas, markers, cropIcons }, null, 2);
+  const buildJSON = () => JSON.stringify({ ...plotData, areas, markers: [], cropIcons }, null, 2);
   function updateSaveState() { const d = isDirty(); saveStateEl.hidden = !d; avSave.hidden = !d; if (d) saveLabel.textContent = 'Unsaved to site'; }
   document.getElementById('copy-json').addEventListener('click', async () => { document.getElementById('export-text').value = buildJSON(); try { await navigator.clipboard.writeText(buildJSON()); } catch {} exportDialog.showModal(); });
   document.getElementById('download-json').addEventListener('click', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buildJSON()], { type: 'application/json' })); a.download = 'areas.json'; a.click(); URL.revokeObjectURL(a.href); });
-  document.getElementById('discard').addEventListener('click', () => { if (!confirm('Discard local changes on this device and revert to the saved site version?')) return; localStorage.removeItem(STORE_KEY); const fresh = JSON.parse(baselineJSON); areas = fresh.areas; markers = fresh.markers; cropIcons = fresh.cropIcons || {}; clearSelection(); renderAreas(); renderMarkers(); refreshSelection(); updateSaveState(); });
+  document.getElementById('discard').addEventListener('click', () => { if (!confirm('Discard local changes on this device and revert to the saved site version?')) return; localStorage.removeItem(STORE_KEY); const fresh = JSON.parse(baselineJSON); areas = fresh.areas; cropIcons = fresh.cropIcons || {}; clearSelection(); renderAreas(); renderStock(); refreshSelection(); updateSaveState(); });
   const setWeb = (m) => { webStatus.textContent = m || ''; };
   const GH_API = `https://api.github.com/repos/${repo.owner}/${repo.name}`;
   async function getToken() {
@@ -892,7 +895,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   document.getElementById('save-web').addEventListener('click', async () => {
     const token = await getToken(); if (!token) return;
     setWeb('Saving…');
-    try { await commitFiles(token, [{ path: repo.path, text: buildJSON() }], 'Update plot from web editor'); baselineJSON = JSON.stringify({ areas, markers, cropIcons }); updateSaveState(); setWeb('✓ Saved — live in ~1 min.'); }
+    try { await commitFiles(token, [{ path: repo.path, text: buildJSON() }], 'Update plot from web editor'); baselineJSON = JSON.stringify({ areas, cropIcons }); updateSaveState(); setWeb('✓ Saved — live in ~1 min.'); }
     catch (e) { setWeb(e.message === 'auth' ? 'Auth failed — check token, tap again.' : 'Error: ' + e.message); }
   });
 
@@ -929,7 +932,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
       files.push({ path: repo.path, text: buildJSON() });
       if (statusEl) statusEl.textContent = `Uploading ${newEvents.length}…`;
       await commitFiles(token, files, `Add ${newEvents.length} photo(s) to ${area.name}`);
-      baselineJSON = JSON.stringify({ areas, markers, cropIcons }); save(); updateSaveState();
+      baselineJSON = JSON.stringify({ areas, cropIcons }); save(); updateSaveState();
       if (statusEl) statusEl.textContent = '✓ Saved — live in ~1 min.';
       renderInfo();
     } catch (e) {
@@ -1044,6 +1047,19 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
           acts.append(ed);
         }
         if (e.kind === 'photo') {
+          // retro-tag: set or change which crop this photo is of
+          const tg = document.createElement('button'); tg.type = 'button'; tg.className = 'tl-act'; tg.title = 'Tag with a crop'; tg.textContent = '🏷';
+          tg.addEventListener('click', () => {
+            const sel = document.createElement('select'); sel.className = 'tl-sel';
+            sel.append(new Option('no crop tag', ''));
+            for (const c of allCrops(OFF_PLOT.has(area.id) ? null : area.id)) sel.append(new Option(`${iconFor(c)} ${c}`, c));
+            if (e.crop) sel.value = e.crop;
+            sel.addEventListener('change', () => { e.crop = sel.value || undefined; save(); renderInfo(); });
+            acts.replaceChildren(sel); sel.focus();
+          });
+          acts.append(tg);
+        }
+        if (e.kind === 'photo') {
           const mv = document.createElement('button'); mv.type = 'button'; mv.className = 'tl-act'; mv.textContent = '⇄ Move';
           mv.addEventListener('click', () => {
             const sel = document.createElement('select'); sel.className = 'tl-sel';
@@ -1088,7 +1104,7 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
     }
   }
 
-  renderAreas(); renderMarkers(); refreshSelection(); refreshChrome(); renderInfo(); updateSaveState();
+  renderAreas(); renderStock(); refreshSelection(); refreshChrome(); renderInfo(); updateSaveState();
   // Deep link: #<area-id> selects that area on load.
   const hashId = decodeURIComponent(location.hash.replace(/^#/, ''));
   if (hashId && areas.some((a) => a.id === hashId)) { history.replaceState({}, '', location.pathname + location.search); history.pushState({ area: hashId }, '', '#' + hashId); showOverlay(hashId); }
@@ -1128,9 +1144,20 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   .crop-btn { display: flex; flex-direction: column; align-items: center; gap: 0; flex-shrink: 0; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 10px; padding: 0.25rem 0.4rem 0.2rem; min-width: 3.2rem; max-width: 4.4rem; }
   .crop-btn__icon { font-size: 1.35rem; line-height: 1.15; }
   .crop-btn__label { font-size: 0.58rem; font-weight: 600; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .crop-btn.is-active { border-color: var(--green); background: var(--green-100); }
-  .crop-btn.is-active .crop-btn__label { color: var(--green-700); }
+  .crop-btn { position: relative; }
+  .crop-btn.has-some { border-color: var(--green); background: var(--green-100); }
+  .crop-btn.has-some .crop-btn__label { color: var(--green-700); }
+  .crop-btn__n { position: absolute; top: -0.45rem; right: -0.35rem; font-size: 0.66rem; font-weight: 800; color: #fff; background: var(--green); border-radius: 999px; padding: 0.05rem 0.35rem; }
+  .crop-btn__minus { position: absolute; top: -0.5rem; left: -0.35rem; width: 1.05rem; height: 1.05rem; display: grid; place-items: center; font-size: 0.85rem; font-weight: 800; color: #a23b2b; background: #fff; border: 1px solid #e3b8b0; border-radius: 999px; }
+  .crop-btn.bump .crop-btn__icon { animation: bump 0.25s ease; }
+  @keyframes bump { 40% { transform: scale(1.35); } }
   .crop-btn--new { border-style: dashed; }
+
+  .step-row { display: grid; grid-template-columns: 1fr auto 2.2rem auto; align-items: center; gap: 0.35rem; margin: 0.3rem 0; }
+  .step-row__label { font-size: 0.86rem; color: var(--ink-soft); }
+  .step-row__val { text-align: center; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .step-btn { width: 2.1rem; height: 2.1rem; font-size: 1.15rem; font-weight: 700; line-height: 1; cursor: pointer; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); border-radius: 10px; }
+  .step-btn:hover { border-color: var(--green); color: var(--green-700); }
 
   .recon { position: absolute; left: 0.6rem; right: 0.6rem; bottom: 5rem; z-index: 6; font-size: 0.74rem; line-height: 1.35; background: color-mix(in srgb, #fff7e6 92%, transparent); border: 1px solid #ecd9a8; color: #6b5310; border-radius: 10px; padding: 0.35rem 0.6rem; backdrop-filter: blur(4px); }
 
@@ -1158,7 +1185,6 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   .map-stage { position: relative; aspect-ratio: 54.955101 / 153.95511; height: min(82vh, 900px); width: auto; margin-inline: auto; border-radius: var(--radius-sm); overflow: hidden; background: #eef0ea; }
   #plot-svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
   #plot-svg.is-editing { cursor: default; }
-  #plot-svg.is-placing { cursor: crosshair; }
 
   .map-card--full { position: fixed; inset: 0; z-index: 60; border-radius: 0; padding: 0; }
   .map-card--full .map-stage { aspect-ratio: auto; width: 100%; height: 100dvh; border-radius: 0; }
@@ -1173,13 +1199,11 @@ const repo = { owner: 'geojenks', name: 'allotment', branch: 'main', path: 'src/
   #plot-svg.focused .plant-count { display: none; }
 
   .area { cursor: pointer; }
-  .area .handle, .marker .handle { cursor: nwse-resize; }
+  .area .handle { cursor: nwse-resize; }
   .area.is-hover rect, .area.is-selected rect { fill-opacity: 0.46; stroke-width: 0.9; }
   .area.is-selected rect { stroke-dasharray: 1.6 1.1; }
-  .marker { cursor: pointer; }
-  .marker.is-selected circle { stroke-width: 0.9; fill-opacity: 0.3; }
-
-  .place-hint { position: absolute; left: 50%; top: 0.7rem; transform: translateX(-50%); margin: 0; padding: 0.3rem 0.8rem; border-radius: 999px; background: var(--green); color: #fff; font-size: 0.82rem; font-weight: 600; box-shadow: var(--shadow); }
+  .stockbadge { cursor: pointer; }
+  .stockbadge:hover rect { fill-opacity: 1; }
 
   .info { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem 1.2rem; box-shadow: var(--shadow-sm); position: sticky; top: calc(var(--header-h) + 14px); min-height: 220px; }
   .info h2 { margin: 0 0 0.5rem; font-size: 1.25rem; }

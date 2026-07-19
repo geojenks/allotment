@@ -23,9 +23,11 @@ calendar — coming next), and per-area (a timeline — coming next).
 - **View** — tap any numbered area to see its details in the side panel.
 - **Zoom in** — select an area then **Zoom in** (or double-click it) to focus on
   that bed. Plant icons only appear at this level.
-- **Plant icons** — when zoomed in, pick an icon from the palette and tap to drop
-  it; drag to move; drag the handle or use the Radius slider to set its footprint.
-  The plot overview shows a `🌱 N` count per bed instead of the icons.
+- **Plants per bed** — beds hold per-crop counts ("stock"), not individually
+  placed icons. In planting mode, tapping a crop in the palette adds one to the
+  focused bed (a − undoes it); tap a bed's "🥦 ×6" badge to fine-tune quantity,
+  slug collars, and condition. The overview shows urgency-coloured headline
+  lines per bed ("6 cabba · 7 cauli").
 - **Edit** — drag an area to move it, drag its corner to resize, **+ Area** to
   create one, edit its name/type/notes.
 

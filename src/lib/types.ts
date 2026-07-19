@@ -155,31 +155,50 @@ export interface Area {
   removed?: string; // ISO date it was cleared/removed, if it no longer exists
   notes?: string;
   plantings?: Planting[];
+  stock?: BedStock[]; // what's physically here, as per-crop counts
   events?: AreaEvent[]; // dated timeline: photos, notes, milestones
   tasks?: PlotTask[];
 }
 
 /**
- * A plant icon dropped on the map. Position is in the same coordinate space as
- * `AreaShape` (millimetres in the source overlay's layer space), and `r` is the
- * radius of its footprint / spread in those same units.
+ * What's physically in a bed, as per-crop counts — the map shows these as
+ * aggregate badges ("🥦 ×6") rather than individually positioned icons.
+ * `collars` = how many wear a slug collar; `struggling`/`eaten` = condition counts.
+ */
+export interface BedStock {
+  crop: string;
+  qty: number;
+  collars?: number;
+  struggling?: number;
+  eaten?: number;
+}
+
+/**
+ * @deprecated Old individually-placed plant icons; migrated into `Area.stock`
+ * on load. Kept so historic files still parse.
  */
 export interface PlantMarker {
   id: string;
-  icon: string; // emoji used as the marker glyph
+  icon: string;
   label?: string;
   x: number;
   y: number;
   r: number;
   family?: CropFamily;
   year?: number;
+  crop?: string;
+  fortified?: boolean;
+  condition?: 'growing' | 'struggling' | 'eaten' | 'dead';
 }
 
 /** The whole plot file: src/data/areas.json. */
 export interface PlotData {
   scaleMmPerMetre?: number;
   areas: Area[];
+  /** @deprecated superseded by per-area `stock`; always [] after migration */
   markers?: PlantMarker[];
+  /** icon (emoji) assigned to each crop name */
+  cropIcons?: Record<string, string>;
 }
 
 /** A month window, 1 = January … 12 = December. Wraps if from > to (e.g. Nov→Feb). */

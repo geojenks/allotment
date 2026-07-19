@@ -123,6 +123,23 @@
             "h": 1280
           }
         }
+      ],
+      "stock": [
+        {
+          "crop": "Cabbage",
+          "qty": 9,
+          "collars": 5
+        },
+        {
+          "crop": "Cauliflower",
+          "qty": 8,
+          "collars": 3
+        },
+        {
+          "crop": "Savoy Cabbage",
+          "qty": 10,
+          "collars": 6
+        }
       ]
     },
     {
@@ -144,6 +161,12 @@
           "year": 2026,
           "status": "volunteer",
           "notes": "Self-seeded from a previous crop."
+        }
+      ],
+      "stock": [
+        {
+          "crop": "Carrot / root",
+          "qty": 1
         }
       ]
     },
@@ -198,6 +221,13 @@
             "w": 720,
             "h": 1280
           }
+        }
+      ],
+      "stock": [
+        {
+          "crop": "Asparagus",
+          "qty": 22,
+          "collars": 1
         }
       ]
     },
@@ -508,472 +538,7 @@
       ]
     }
   ],
-  "markers": [
-    {
-      "id": "m-rox0nt",
-      "icon": "🥕",
-      "label": "Carrot / root",
-      "x": 130.878,
-      "y": 112.364,
-      "r": 1.53
-    },
-    {
-      "id": "m-ujriqk",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 108.124,
-      "y": 120.772,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-lakz16",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 110.71,
-      "y": 120.691,
-      "r": 0.75
-    },
-    {
-      "id": "m-lluvhd",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 112.892,
-      "y": 120.95,
-      "r": 0.75
-    },
-    {
-      "id": "m-atuxzy",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 115.462,
-      "y": 120.901,
-      "r": 0.75
-    },
-    {
-      "id": "m-h8a3wb",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 117.919,
-      "y": 121.095,
-      "r": 0.75
-    },
-    {
-      "id": "m-kmvij7",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 120.796,
-      "y": 121.354,
-      "r": 0.75
-    },
-    {
-      "id": "m-xawo21",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 109.336,
-      "y": 122.857,
-      "r": 0.75
-    },
-    {
-      "id": "m-3txbn5",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 111.89,
-      "y": 123.051,
-      "r": 0.75
-    },
-    {
-      "id": "m-3bjt74",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 114.25,
-      "y": 122.905,
-      "r": 0.75
-    },
-    {
-      "id": "m-756mim",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 116.755,
-      "y": 122.841,
-      "r": 0.75
-    },
-    {
-      "id": "m-cuph2s",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 119.212,
-      "y": 123.277,
-      "r": 0.75
-    },
-    {
-      "id": "m-2j8zca",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 121.475,
-      "y": 123.536,
-      "r": 0.75
-    },
-    {
-      "id": "m-3i9zqp",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 108.367,
-      "y": 124.991,
-      "r": 0.75
-    },
-    {
-      "id": "m-cpc3g6",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 110.904,
-      "y": 124.91,
-      "r": 0.75
-    },
-    {
-      "id": "m-33youa",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 113.183,
-      "y": 125.217,
-      "r": 0.75
-    },
-    {
-      "id": "m-zqajeu",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 116.206,
-      "y": 124.926,
-      "r": 0.75
-    },
-    {
-      "id": "m-2keb6w",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 119.794,
-      "y": 125.475,
-      "r": 0.75
-    },
-    {
-      "id": "m-2f8pu2",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 120.909,
-      "y": 126.768,
-      "r": 0.75
-    },
-    {
-      "id": "m-ldnu7b",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 117.563,
-      "y": 126.752,
-      "r": 0.75
-    },
-    {
-      "id": "m-1jtjra",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 114.832,
-      "y": 126.526,
-      "r": 0.75
-    },
-    {
-      "id": "m-j4z804",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 111.68,
-      "y": 126.833,
-      "r": 0.75
-    },
-    {
-      "id": "m-ofb3jn",
-      "icon": "🌾",
-      "label": "Asparagus",
-      "crop": "Asparagus",
-      "x": 108.819,
-      "y": 126.817,
-      "r": 0.75
-    },
-    {
-      "id": "m-94l2sf",
-      "icon": "🥦",
-      "label": "Cabbage",
-      "crop": "Cabbage",
-      "x": 107.671,
-      "y": 108.893,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-3pn646",
-      "icon": "🥦",
-      "label": "Cabbage",
-      "crop": "Cabbage",
-      "x": 109.599,
-      "y": 109.062,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-etcg5v",
-      "icon": "🥦",
-      "label": "Cabbage",
-      "crop": "Cabbage",
-      "x": 111.527,
-      "y": 109.079,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-88k2iy",
-      "icon": "🥦",
-      "label": "Cabbage",
-      "crop": "Cabbage",
-      "x": 108.415,
-      "y": 110.94,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-3ijbwz",
-      "icon": "🥦",
-      "label": "Cabbage",
-      "crop": "Cabbage",
-      "x": 109.734,
-      "y": 110.839,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-uyd8a3",
-      "icon": "🥦",
-      "label": "Cabbage",
-      "crop": "Cabbage",
-      "x": 111.713,
-      "y": 111.278,
-      "r": 0.75
-    },
-    {
-      "id": "m-j8dgx9",
-      "icon": "🥦",
-      "label": "Cabbage",
-      "crop": "Cabbage",
-      "x": 108.212,
-      "y": 112.801,
-      "r": 0.75
-    },
-    {
-      "id": "m-umf58i",
-      "icon": "🥦",
-      "label": "Cabbage",
-      "crop": "Cabbage",
-      "x": 109.717,
-      "y": 112.953,
-      "r": 0.75
-    },
-    {
-      "id": "m-5651p1",
-      "icon": "🥦",
-      "label": "Cabbage",
-      "crop": "Cabbage",
-      "x": 111.578,
-      "y": 112.953,
-      "r": 0.75
-    },
-    {
-      "id": "m-bos9sz",
-      "icon": "🥦",
-      "label": "Cauliflower",
-      "crop": "Cauliflower",
-      "x": 113.523,
-      "y": 108.978,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-1437fy",
-      "icon": "🥦",
-      "label": "Cauliflower",
-      "crop": "Cauliflower",
-      "x": 115.215,
-      "y": 108.707,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-zgc2nz",
-      "icon": "🥦",
-      "label": "Cauliflower",
-      "crop": "Cauliflower",
-      "x": 116.687,
-      "y": 108.944,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-ql6j34",
-      "icon": "🥦",
-      "label": "Cauliflower",
-      "crop": "Cauliflower",
-      "x": 114.166,
-      "y": 110.653,
-      "r": 0.75
-    },
-    {
-      "id": "m-oh1k87",
-      "icon": "🥦",
-      "label": "Cauliflower",
-      "crop": "Cauliflower",
-      "x": 115.519,
-      "y": 110.72,
-      "r": 0.75
-    },
-    {
-      "id": "m-o53elr",
-      "icon": "🥦",
-      "label": "Cauliflower",
-      "crop": "Cauliflower",
-      "x": 113.591,
-      "y": 112.818,
-      "r": 0.75
-    },
-    {
-      "id": "m-yr9cgb",
-      "icon": "🥦",
-      "label": "Cauliflower",
-      "crop": "Cauliflower",
-      "x": 114.589,
-      "y": 112.564,
-      "r": 0.75
-    },
-    {
-      "id": "m-62962h",
-      "icon": "🥦",
-      "label": "Cauliflower",
-      "crop": "Cauliflower",
-      "x": 115.756,
-      "y": 112.632,
-      "r": 0.75
-    },
-    {
-      "id": "m-yg5axl",
-      "icon": "🥦",
-      "label": "Savoy Cabbage",
-      "crop": "Savoy Cabbage",
-      "x": 118.243,
-      "y": 109.029,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-0tu9r5",
-      "icon": "🥦",
-      "label": "Savoy Cabbage",
-      "crop": "Savoy Cabbage",
-      "x": 119.647,
-      "y": 108.995,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-7gh0lq",
-      "icon": "🥦",
-      "label": "Savoy Cabbage",
-      "crop": "Savoy Cabbage",
-      "x": 121.271,
-      "y": 109.012,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-3lrt8o",
-      "icon": "🥦",
-      "label": "Savoy Cabbage",
-      "crop": "Savoy Cabbage",
-      "x": 117.549,
-      "y": 110.991,
-      "r": 0.75
-    },
-    {
-      "id": "m-47kvgp",
-      "icon": "🥦",
-      "label": "Savoy Cabbage",
-      "crop": "Savoy Cabbage",
-      "x": 119.309,
-      "y": 111.109,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-kn9k42",
-      "icon": "🥦",
-      "label": "Savoy Cabbage",
-      "crop": "Savoy Cabbage",
-      "x": 120.916,
-      "y": 110.991,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-d7nahq",
-      "icon": "🥦",
-      "label": "Savoy Cabbage",
-      "crop": "Savoy Cabbage",
-      "x": 122.32,
-      "y": 110.754,
-      "r": 0.75,
-      "fortified": true
-    },
-    {
-      "id": "m-z3brpg",
-      "icon": "🥦",
-      "label": "Savoy Cabbage",
-      "crop": "Savoy Cabbage",
-      "x": 118.294,
-      "y": 113.071,
-      "r": 0.75
-    },
-    {
-      "id": "m-hqzhkd",
-      "icon": "🥦",
-      "label": "Savoy Cabbage",
-      "crop": "Savoy Cabbage",
-      "x": 120.053,
-      "y": 113.139,
-      "r": 0.75
-    },
-    {
-      "id": "m-7vrrbt",
-      "icon": "🥦",
-      "label": "Savoy Cabbage",
-      "crop": "Savoy Cabbage",
-      "x": 121.609,
-      "y": 112.987,
-      "r": 0.75
-    }
-  ],
+  "markers": [],
   "cropIcons": {
     "Asparagus": "🌾",
     "Cabbage": "🥦",
