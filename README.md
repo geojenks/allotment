@@ -6,23 +6,41 @@ Built with [Astro](https://astro.build) and deployed to GitHub Pages.
 
 ## How it's structured
 
-Everything is driven from **one data file**, [`src/data/areas.json`](src/data/areas.json),
-so the same information can be shown spatially (the map), chronologically (a
-calendar — coming next), and per-area (a timeline — coming next).
+Four JSON files under `src/data/` drive everything; the pages are different
+views over them. Each is edited in the browser and committed back to this repo
+via an on-device GitHub token (see *Saving your changes*).
 
-- `src/data/areas.json` — the single source of truth: every area, its position
-  on the plot, and its plantings / tasks / notes. The shape coordinates come
-  from `figures/plot_overlay.svg` so they sit exactly over the aerial photo.
-- `src/lib/types.ts` — the data model (areas, plantings, families, tasks,
-  timeline entries), documented inline.
-- `src/components/PlotMap.astro` — the interactive map.
-- `public/map/plot-base.png` — the aerial background (extracted from your SVG).
+- `src/data/areas.json` — the plot: every area, its position over the aerial
+  photo (`figures/plot_overlay.svg` coordinates), per-bed **stock** (crop
+  counts + slug collars + condition), photo/note **timelines** (photos can be
+  tagged with a crop), and `cropIcons` (emoji per crop).
+- `src/data/seeds.json` — the seed bank (packets + advisory windows) and
+  **sowings** (actual instances that flow through the Pipeline).
+- `src/data/log.json` — the diary: watered / weeding / project-work entries
+  logged from the Calendar.
+- `src/data/plans.json` — bed plans painted on the Plans season timeline
+  (family + crop shortlist + plant-out/clear months).
+- `src/lib/types.ts` — the data model for all of the above, documented inline.
+- `src/lib/datastore.ts` — shared browser helpers: GitHub commit-via-API,
+  localStorage overlays, Anthropic key, image compression, plot coordinates.
+- `src/lib/plantsheet.ts` — the "plant sheet" popup (crop story) used by
+  Today and the Calendar.
+- `src/components/PlotMap.astro` — the interactive map (largest component).
+- `public/map/plot-base.png` — the aerial background (extracted from the SVG).
+
+**CLAUDE.md documents the architecture, conventions and gotchas for anyone
+(human or AI) working on the code — read it before making changes.**
 
 ## The map
 
-- **View** — tap any numbered area to see its details in the side panel.
+- **View** — tap any numbered area to open its full-screen dossier. On phones
+  the plot fills the screen width (pan up/down); ⤢ shows the whole plot.
+  Zoomed-out beds show urgency-coloured headline lines ("6 cabba · 7 cauli":
+  red = needs action, amber = struggling, green = harvest near/ready).
 - **Zoom in** — select an area then **Zoom in** (or double-click it) to focus on
-  that bed. Plant icons only appear at this level.
+  that bed. Stock badges only appear at this level.
+- **Off the plot** — the Home greenhouse lives in its own card below the map
+  (same dossier/journal treatment, deep link `map#home-greenhouse`).
 - **Plants per bed** — beds hold per-crop counts ("stock"), not individually
   placed icons. In planting mode, tapping a crop in the palette adds one to the
   focused bed (a − undoes it); tap a bed's "🥦 ×6" badge to fine-tune quantity,
@@ -41,8 +59,12 @@ date in Edit mode to anchor the start of its timeline.
 **Add photo** opens your camera or photo library (multi-select). Images are
 compressed in-browser (~1280px) and committed straight to `public/photos/<area>/`
 via your GitHub token — so they need the same token as *Save to website* and go
-live in ~1 minute. **Note** adds a dated text entry (saved locally until you Save
-to website / add a photo).
+live in ~1 minute. Photos can carry an optional **crop tag** (set at upload or
+retro-tagged via 🏷): tagged journals grow per-crop filter chips — the
+greenhouse's "sections" — and the plant sheet strings a crop's tagged photos
+across all places into one progress story. **Note** adds a dated text entry
+(saved locally until you Save to website / add a photo). Dates and tags of
+existing entries are editable (📅 / 🏷), and photos can be moved between areas.
 
 ### Saving your changes
 
@@ -86,30 +108,46 @@ in [`astro.config.mjs`](astro.config.mjs).
 
 ## Sections
 
-- **Layout** — the interactive plot map (`src/data/areas.json`). Full-screen
-  "planting mode" for dropping many plants on a bed from a phone.
+The site opens on **Today**; on phones a bottom bar gives Today / Map /
+Pipeline / Calendar / ⋯More (Seeds, Plans, Projects, Greenhouse).
+
+- **Today** (`/`) — dashboard: watering banner, needs-attention list (overdue
+  plant-outs, last-month-to-sow packets, plan sow-by deadlines), picking
+  now/soon, sow-now chips. Tapping a crop opens the **plant sheet** — counts by
+  place, each sowing's story, the packet, the cross-place photo story.
+- **Map** (`/map`) — the interactive plot map (`src/data/areas.json`), with
+  full-screen "planting mode" for updating a bed's crop counts from a phone.
+  Old `/#bed-id` bookmarks redirect here.
 - **Pipeline** — every sowing from packet to plate: Seed bank → Nursery →
   Growing on → Harvest, with adaptive expected dates (predicted from your
-  *actual* sow date, editable per sowing) and green/amber/red status.
-- **Calendar** — agenda derived from plantings, dated tasks, and actual
-  sowings, plus real rainfall (past) and rain forecast from Open-Meteo, with a
-  "worth a watering trip" banner.
-- **Seeds** — the seed bank (`src/data/seeds.json`): packet windows, sow-now /
-  harvest-now filters, and **📷 Scan packet** — photograph a seed packet and a
-  Claude vision call pre-fills the form (needs an Anthropic API key, stored
-  on-device like the GitHub token; ~fractions of a penny per scan).
-- **Nursery** — active sowings under glass, stage tracking and plant-out.
-- **Plans** — beds free vs planted, rotation reference.
-- **Projects** — bigger jobs (`src/data/projects.json`).
+  *actual* sow date, editable per sowing), green/amber/red status,
+  "stays under cover" for greenhouse fruiters, progress photos, and
+  **🛒 Add bought plants** for plugs with no packet.
+- **Calendar** — agenda from plantings, tasks, sowings, bed plans and the
+  diary; real rainfall + 16-day forecast from Open-Meteo with a "worth a
+  watering trip" banner. Tap a day for the full card and to log
+  watered / weeding / project entries (`src/data/log.json`).
+- **Seeds** — the seed bank (`src/data/seeds.json`): family-grouped collapsible
+  rows, sow-now / harvest-now filters, plain-English sowing method, and
+  **📷 Scan packet** — a Claude vision call pre-fills the form from a photo
+  (needs an Anthropic API key, stored on-device like the GitHub token;
+  fractions of a penny per scan).
+- **Plans** — the season timeline (`src/data/plans.json`): every bed across 18
+  months, actual occupancy vs painted plans, back-propagated sow-by reminders,
+  plus next-season rotation suggestions.
+- **Nursery** (kept off the nav; Pipeline supersedes it) and **Projects**
+  (`src/data/projects.json`).
 
 ## Roadmap
 
 - [x] Interactive plot map (view + edit/add areas)
-- [x] Per-area photo timeline
-- [x] Calendar / chronological "what to do when" view
-- [x] Seed bank → nursery → calendar pipeline
-- [x] Pipeline board with adaptive plant-out/harvest predictions
-- [x] Rainfall + watering nudge on the calendar
+- [x] Per-area photo timeline, crop-tagged photos, greenhouse journal
+- [x] Calendar with diary logging, weather, and day cards
+- [x] Seed bank → nursery → pipeline with adaptive dates
+- [x] Rainfall + watering nudge
 - [x] Seed-packet photo scanning
-- [ ] Crop-rotation helper (warns when a plant family returns to a bed too soon)
+- [x] Per-bed crop counts with collars/condition + urgency headlines
+- [x] Visual season planner with rotation suggestions
+- [ ] Draggable plan bars on the season timeline (v1 is tap-to-edit)
+- [ ] Inline editing inside the plant sheet
 - [ ] Companion-planting suggestions
